@@ -1,3 +1,11 @@
+function getItemCount(item)
+    local total = 0
+    for _, s in ipairs(item) do
+        total = total + s.slot.count
+    end
+    return total
+end
+
 function toNumberOrDefault(str, default)
     if pcall(tonumber, str) then
         return tonumber(str)

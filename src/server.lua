@@ -1,4 +1,5 @@
 local modem = peripheral.find("modem") or error("No modem attached", 0)
+local monitor = peripheral.find("monitor") or error("No monitor attached", 0)
 peripheral.find("modem", rednet.open)
 
 RECIPES_FILE = "recipes.txt"
@@ -12,7 +13,6 @@ free = {}
 
 function scanRemoteInventory(remote)
     -- scan remote inventory and populate global inventory
-    print("Scanning " .. remote .. "...")
     local chest = peripheral.wrap(remote)
     for cslot=1,chest.size() do
         local item = chest.getItemDetail(cslot)
@@ -35,8 +35,11 @@ end
 
 function scanAll()
     -- Populate inventory
-    for i, remote in pairs(modem.getNamesRemote()) do
+    -- TODO make progress bar
+    local remotes = modem.getNamesRemote()
+    for i, remote in pairs(remotes) do
         if ALLOWED_INVENTORIES[modem.getTypeRemote(remote)] then
+            print("Scanning " .. remote .. "...")
             scanRemoteInventory(remote)
         end
     end
@@ -67,6 +70,10 @@ function get(name, count, turtle, turtleSlot)
                 return {ok=true, response={name=name, count=count}, error=""}
             elseif left == 0 then
                 -- just enough item
+                print(turtle)
+                print(location.slot.index)
+                print(item.count)
+                print(turtleSlot)
                 modem.callRemote(chest, "pushItems", turtle, location.slot.index, item.count, turtleSlot)
                 -- add free slot and remove inventory slot
                 print(textutils.serialize(free))
@@ -437,6 +444,7 @@ function decodeMessage(message, client)
             return sendResponse(client, get(message.item, 1, message.from, message.slot))
         end
     elseif message.endpoint == "info" then
+        progressBar("DU")
         return sendResponse(client, {ok=true, response=inventory})
     elseif message.endpoint == "clean" then
         return sendResponse(client, clearGrid(message.from))
@@ -451,14 +459,56 @@ function decodeMessage(message, client)
     end
 end
 
-scanAll()
-loadRecipes()
+function getInventorySlotsNumber()
+    total = 0
+    for key, value in pairs(inventory) do
+        total = total + #value
+    end
+    return total
+end
 
-print("Waiting for clients requests...")
-while true do
-    client, message = rednet.receive("INVENTORY")
-    if client ~= nil then 
-        print(textutils.serialize(message))
-        decodeMessage(message, client)
+function progressBar(text)
+    monitor.clear()
+    local current = getInventorySlotsNumber()
+    local max = current + #free
+    local x, y = monitor.getSize()
+    local ratio = (current * x) / max
+    local percent = tonumber(current/max*100)
+    monitor.setTextColor(colors.black)
+    local barColor = nil
+    if percent < 50 then
+        barColor = colors.green
+    elseif percent < 80 then
+        barColor = colors.orange
+    else
+        barColor = colors.red
+    end
+    monitor.setBackgroundColor(colors.red)
+    local cpt = 1
+    while cpt <= ratio do
+        monitor.setCursorPos(cpt, 2)
+        monitor.write(" ")
+        cpt = cpt + 1
+    end
+    monitor.setCursorPos(1, 1)
+    monitor.setTextColor(colors.white)
+    monitor.setBackgroundColor(colors.black)
+    monitor.write(text .. ": ".. math.floor((current/max*100)+0.5) .."%")
+end
+    
+function handleRequests()
+    while true do
+        client, message = rednet.receive("INVENTORY")
+        if client ~= nil then 
+            print(textutils.serialize(message))
+            decodeMessage(message, client)
+        end
     end
 end
+
+scanAll()
+loadRecipes()
+progressBar("DU")
+print("Waiting for clients requests...")
+handleRequests()
+

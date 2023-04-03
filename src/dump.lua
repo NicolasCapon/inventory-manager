@@ -2,7 +2,7 @@ local utils = require("utils")
 local completion = require "cc.completion"
 
 local modem = peripheral.find("modem") or error("No modem attached", 0)
-rednet.open("bottom")
+rednet.open("right")
 
 function dump()
     for i=1,16 do

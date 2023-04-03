@@ -3,7 +3,7 @@ require("dump")
 local completion = require "cc.completion"
 
 local modem = peripheral.find("modem") or error("No modem attached", 0)
-rednet.open("bottom")
+rednet.open("right")
 
 function make(recipe, recursive, count)
     -- if recursive -> getSubCrafts() else check #getMissingItems() == 0
@@ -20,17 +20,17 @@ function make(recipe, recursive, count)
                 -- Avoid maxlvl entry
                 if dependency ~= "maxlvl" then
                     if value.lvl == deplvl then
-                        craft(recipes[dependency], value.count)
+                        if not craft(recipes[dependency], value.count).ok then return false end
                     end
                 end
             end
             deplvl = deplvl - 1
         end
-        craft(recipe, count)
+        if not craft(recipe, count).ok then return false end
     else
         local missingItems = getMissingItems(recipe)
         if #missingItems == 0 then
-            craft(recipe, count)
+            if not craft(recipe, count).ok then return false end
         else
             printError("Missing Items: ")
             -- TODO print items missing
