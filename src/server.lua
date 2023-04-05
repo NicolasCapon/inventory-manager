@@ -54,7 +54,7 @@ end
 function get(name, count, turtle, turtleSlot)
     local item = inventory[name]
     if item == nil then
-        local error = name .. "not found"
+        local error = name .. " not found"
         return {ok=false, response={name=name, count=count}, error=error}
     else
         for i, location in ipairs(item) do
@@ -63,20 +63,14 @@ function get(name, count, turtle, turtleSlot)
             local left = inventory_count - count
             if left > 0 then
                 -- Enough items in this slot
-                print("count" .. count)
                 modem.callRemote(chest, "pushItems", turtle, location.slot.index, count, turtleSlot)
                 -- update inventory
                 inventory[name][i]["slot"]["count"] = left
                 return {ok=true, response={name=name, count=count}, error=""}
             elseif left == 0 then
                 -- just enough item
-                print(turtle)
-                print(location.slot.index)
-                print(item.count)
-                print(turtleSlot)
                 modem.callRemote(chest, "pushItems", turtle, location.slot.index, item.count, turtleSlot)
                 -- add free slot and remove inventory slot
-                print(textutils.serialize(free))
                 table.insert(free, {chest=chest, slot={index=location.slot.index, limit=location.slot.limit}})
                 -- table.remove(inventory[name], i) -- TODO remove slots at the end
                 inventory[name][i].status = "TO_REMOVE"
@@ -101,28 +95,6 @@ function get(name, count, turtle, turtleSlot)
         end
     end
 end
-
--- function getRecipesList()
---     for key, value in pairs(recipes) do
---         if value ~= nil then
---             n = n + 1
---             keyset[n] = key
---         end
---     end
---     return keyset
--- end
-
--- function getItemsList()
---     local keyset = {}
---     local n = 0
---     for key, value in pairs(inventory) do
---         if value ~= nil then
---             n = n + 1
---             keyset[n] = key
---         end
---     end
---     return keyset
--- end
 
 function loadRecipes()
     local keyset = {}
@@ -155,7 +127,6 @@ function put_in_free_slot(name, count, turtle, turtleSlot)
         local left = limit - count
         if left > -1 then
             -- put does not exceed item limit for this free slot
-            print(fslot.slot.index)
             modem.callRemote(fslot.chest, "pullItems", turtle, turtleSlot, count, fslot.slot.index)
             -- add item in inventory
             table.insert(inventory[name], {chest=chest, slot={index=fslot.slot.index, limit=limit, count=count}})
@@ -232,33 +203,7 @@ function clearInventory(input)
         input[i]=nil
     end
     if not next(input) then input = nil end
-    term.setTextColour(colors.green)
-    print(textutils.serialize(input))
-    term.setTextColour(colors.white)
     return input
-end
-
--- https://stackoverflow.com/questions/12394841/safely-remove-items-from-an-array-table-while-iterating
-function clearInventory_TO_REMOVE(t)
-    -- Remove slots marks as TO_REMOVE
-    local j = 1
-    local n = #t
-
-    for i=1,n do
-        print(i)
-        if t[i].status == "TO_REMOVE" then
-        print("clean")
-            -- Move i's kept value to j's position, if it's not already there.
-            if (i ~= j) then
-                t[j] = t[i];
-                t[i] = nil;
-            end
-            j = j + 1; -- Increment position of where we'll place the next kept value.
-        else
-            t[i] = nil;
-        end
-    end
-    return t;
 end
 
 function clearGrid(turtleName)
@@ -267,8 +212,6 @@ function clearGrid(turtleName)
     local responses = {}
     local turtle = peripheral.wrap(turtleName)
     for i=1,16 do
-        print(textutils.serialize(peripheral.call(turtleName, "getItemDetail")))
-        print(textutils.serialize(turtle.getItemDetail()))
         local item = modem.callRemote(turtle, "getItemDetail")
         if item ~= nil then
             -- slot not empty, put in inventory
@@ -280,59 +223,6 @@ function clearGrid(turtleName)
         end
     end
     return {ok=status, response=responses, error=""}
-end
-
--- function make(recipe, recursive, turtleID)
---     -- craft item given by its recipe
---     -- set recursive=true to craft sub recipes if necessary
---     local error = ""
---     local turtle = peripheral.wrap(turtleID)
---     for i, item in recipe.items do
---         turtle.select(item.slot)
---         local count = item.count
---         local current = turtle.getItemDetail()
---         -- test if item already in crafting grid
---         if current.name ~= item.name then
---             -- clean slot
---             put(current.name, current.count)
---         else
---             count = count - current.count
---         end
---         if count < -1 then
---             -- put back the difference
---             put(item.name, current.count - count)
---         end
---         if count > 0 then
---             if not get(item.name, count, turtleID).ok then
---                 if not recursive then
---                     error = "Not enough " .. item.name
---                     return {ok=false, response=recipe, error=error}
---                 end
---                 -- Search for recipe
---                 local recipe = recipes[item.name]
---                 if recipe ~= nil then
---                     if not make(recipe, recursive, turtleID).ok then
---                         error = "Cannot craft recipe " .. recipe.name
---                         return {ok=false, response=recipe, error=error}
---                     end
---                 else
---                     error = "Missing item or recipe for " .. item.name
---                     return {ok=false, response=recipe, error=error}
---                 end
---             end
---         end
---     end
---     return {ok=turtle.craft(), response=recipe, error=error}
--- end
-
-function fuzzyFindRecipes(name)
-    local recs = {}
-    for key, value in pairs(recipes) do
-        if key.find(name) then
-            table.insert(recs, key)
-        end
-    end
-    return recs
 end
 
 function saveRecipe(recipe)
@@ -370,16 +260,6 @@ function countItem(item)
     return total
 end
 
-function getMissingItems(recipe)
-    local missingItems = {}
-    for _, item in ipairs(recipe.items) do
-        if item.count > countItem(item.name) then
-            table.insert(missingItems, item)
-        end
-    end
-    return missingItems
-end
-
 function addDependency(dependencies, recipe, count, lvl)
     -- add recipe lvl of dependencies and item count
     if dependencies["maxlvl"] < lvl then
@@ -398,65 +278,76 @@ function addDependency(dependencies, recipe, count, lvl)
     return dependencies
 end
 
-function getSubCrafts(recipe, dependencies, lvl)
-    -- TODO handle if we need to craft more than one object ?
-    lvl = lvl + 1
-    local error = nil
-    -- Verify each recipe item in inventory
-    local missingItems = getMissingItems(recipe)
-    if #missingItems > 0 then
-        -- Do the recursive part
-        for _, item in ipairs(missingItems) do
-            local missingItemRecipe = recipes[item.name]
-            if missingItemRecipe == nil then
-                -- Item and recipe are missing, throw error
-                error = "Missing item " .. item.name .. " or recipe for it."
-                return {ok=false, response=item, error=error}
+-- Check a recipe for missing materials and keep track of inventory lvl
+function checkMaterials(recipe, count, inventoryCount)
+    local toCraft = {} -- items unavailable in inventory
+    for _, item in ipairs(recipe.items) do
+        -- if inventoryCount not set, initialize it to inventory lvl
+        if inventoryCount[item.name] == nil then
+            inventoryCount[item.name] = countItem(item.name)
+        end
+        local diff = (item.count * count) - inventoryCount[item.name]
+        if diff > 0 then
+            -- materials are missing
+            inventoryCount[item.name] = 0
+            if toCraft[item.name] == nil then
+                toCraft[item.name] = diff
             else
-                -- Only item is missing, get sub-recipes (dependencies)
-                local response = getSubCrafts(missingItemRecipe, dependencies, lvl)
-                if response.ok then
-                    dependencies = addDependency(dependencies, missingItemRecipe, item.count, lvl)
-                else
-                    return {ok=false, response=response.response, error=response.error}
-                end
+                -- usefull if recipe contains multiple of the same item
+                toCraft[item.name] = toCraft[item.name] + diff
             end
+        else
+            -- update what is left in inventory
+            inventoryCount[item.name] = math.abs(diff)
         end
     end
-    return {ok=true, response={recipe=recipe, dependencies=dependencies}, error=error}
+    return inventoryCount, toCraft
 end
 
-function decodeMessage(message, client)
-    if message.endpoint == "get" then
-        -- Verify item name
-        local items = fuzzyFindItems(message.item)
-        if #items > 1 then
-            return sendResponse(client, {ok=false, response=items, error="Multiple items found"})
-        elseif #items == 1 then
-            message.item = items[1]
+-- Get if recipe can be crafted with current state of the inventory
+-- Take into account inner recipes if items are missing and have a recipe
+function getAvailability(recipe, count, dependencies, lvl, inventoryCount, missing, ok)
+    -- get recipe dependencies for crafting in the right order
+    dependencies = dependencies or {maxlvl=0} 
+    -- lvl is the lvl of recursion for this recipe
+    lvl = lvl or 0
+    -- keep track of inventory count for items
+    inventoryCount = inventoryCount or {}
+    -- keep track of missing items
+    missing = missing or {}
+    if ok == nil then ok = true else ok = false end
+
+    -- check items for this recipe
+    local inventoryCount, toCraft = checkMaterials(recipe, count, inventoryCount)
+    lvl = lvl + 1
+    for key, value in pairs(toCraft) do
+        local recipeToCraft = recipes[key]
+        if recipeToCraft ~= nil then
+            -- if recipe produce more than one item, adjust number to craft
+            value = math.ceil(value / recipeToCraft.count) -- round up
+            -- Recurse this function
+            local request = getAvailability(recipeToCraft, value, dependencies, lvl, inventoryCount, missing, ok)
+            -- if a step fail, whole status must be false
+            if not request.ok then
+                ok = false
+            end
+            -- update recursive values
+            inventoryCount = request.response.inventoryCount
+            missing = request.response.missing
+            dependencies = addDependency(request.response.dependencies, recipeToCraft, value, lvl)
         else
-            return sendResponse(client, {ok=false, response={}, error="Item not in inventory"})
+            -- Item is raw material without enough quantity or 
+            -- we dont have a recipe for it. Throw error
+            ok = false
+            if not missing[key] then
+                missing[key] = value
+            else
+            missing[key] = missing[key] + value
+            end
+            -- return {ok=false, response={recipe=recipe, count=count}, error=error}
         end
-        -- Verify item count
-        if message.count ~= nil then
-            return sendResponse(client, get(message.item, message.count, message.from, message.slot))
-        else
-            return sendResponse(client, get(message.item, 1, message.from, message.slot))
-        end
-    elseif message.endpoint == "info" then
-        progressBar("DU")
-        return sendResponse(client, {ok=true, response=inventory})
-    elseif message.endpoint == "clean" then
-        return sendResponse(client, clearGrid(message.from))
-    elseif message.endpoint == "put" then
-        return sendResponse(client, put(message.item, message.count, message.from, message.slot))
-    elseif message.endpoint == "recipes" then
-        return sendResponse(client, {ok=true, response=recipes})
-    elseif message.endpoint == "make" then
-        sendResponse(client, getSubCrafts(message.recipe, {maxlvl=0}, 0))
-    elseif message.endpoint == "add" then
-        sendResponse(client, saveRecipe(message.recipe))
     end
+    return {ok=ok, response={recipe=recipe, count=count, dependencies=dependencies, missing=missing, inventoryCount=inventoryCount}, error=missing}
 end
 
 function getInventorySlotsNumber()
@@ -478,8 +369,10 @@ function progressBar(text)
     local barColor = nil
     if percent < 50 then
         barColor = colors.green
-    elseif percent < 80 then
-        barColor = colors.orange
+    elseif percent < 70 then
+        barColor = colors.yellow
+    elseif percent < 90 then
+        barColor = colors.yellow
     else
         barColor = colors.red
     end
@@ -496,6 +389,43 @@ function progressBar(text)
     monitor.write(text .. ": ".. math.floor((current/max*100)+0.5) .."%")
 end
     
+-- TODO ? show doable recipes to the GET screen
+function getDoableRecipes(inventory, recipes)
+    doableRecipes = {} -- dict key = value where value is a list of recipes
+    for key, value in pairs(recipes) do
+        if (inventory[key] == nil or #inventory[key] == 0) then
+            local request = getAvailability(key)
+            if request.ok then
+                if not doableRecipes[key] then
+                doableRecipes[key] = {request.response}
+                else
+                    table.insert(doableRecipes[key], request.response)
+                end
+            end
+        end
+    end
+    return doableRecipes
+end
+
+function decodeMessage(message, client)
+    if message.endpoint == "get" then
+        return sendResponse(client, get(message.item, message.count, message.from, message.slot))
+    elseif message.endpoint == "info" then
+        progressBar("DU")
+        return sendResponse(client, {ok=true, response=inventory})
+    elseif message.endpoint == "clean" then
+        return sendResponse(client, clearGrid(message.from))
+    elseif message.endpoint == "put" then
+        return sendResponse(client, put(message.item, message.count, message.from, message.slot))
+    elseif message.endpoint == "recipes" then
+        return sendResponse(client, {ok=true, response=recipes})
+    elseif message.endpoint == "make" then
+        sendResponse(client, getAvailability(message.recipe, message.count))
+    elseif message.endpoint == "add" then
+        sendResponse(client, saveRecipe(message.recipe))
+    end
+end
+
 function handleRequests()
     while true do
         client, message = rednet.receive("INVENTORY")
