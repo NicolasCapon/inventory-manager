@@ -50,10 +50,6 @@ function printColor(message, col)
     term.setTextColour(colors.white)
 end
 
-function log(message)
-    printColor(textutils.serialize(message), colors.purple)
-end
-
 function printError(message)
     -- TODO: print message in red
     term.setTextColour(colors.red)

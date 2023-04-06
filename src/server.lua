@@ -407,6 +407,7 @@ function getDoableRecipes(inventory, recipes)
     return doableRecipes
 end
 
+-- TODO xpcall sendResponse()
 function decodeMessage(message, client)
     if message.endpoint == "get" then
         return sendResponse(client, get(message.item, message.count, message.from, message.slot))
