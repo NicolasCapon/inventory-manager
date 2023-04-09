@@ -315,7 +315,7 @@ function getAvailability(recipe, count, dependencies, lvl, inventoryCount, missi
     inventoryCount = inventoryCount or {}
     -- keep track of missing items
     missing = missing or {}
-    if ok == nil then ok = true else ok = false end
+    if ok == nil then ok = true end
 
     -- check items for this recipe
     local inventoryCount, toCraft = checkMaterials(recipe, count, inventoryCount)
