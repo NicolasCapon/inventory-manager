@@ -225,11 +225,25 @@ function clearGrid(turtleName)
     return {ok=status, response=responses, error=""}
 end
 
+function removeExcessiveItems(recipe)
+    local min = 64
+    for _, item in ipairs(recipe.items) do
+        if item.count < min then
+            min = item.count
+        end
+        item.count = 1
+    end
+    recipe.count = recipe.count / min
+    return recipe
+end
+
 function saveRecipe(recipe)
     if recipes[recipe] ~= nil then
         -- recipe already exist print error
         return {ok=false, response=recipe, error="Recipe already exists"}
     end
+    -- Assume each recipe cannot contains more than one item per slot
+    recipe = removeExcessiveItems(recipe)
     local file = fs.open(RECIPES_FILE, "a")
     file.write(textutils.serialize(recipe, { compact = true }) .. "\n")
     file.close()
