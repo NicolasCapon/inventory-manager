@@ -77,6 +77,10 @@ function filterList(self, event, key)
 end
 
 function make(name, count)
+    if not checkForEmptySlots() then
+        log("Dump first")
+        return false
+    end
     local recursive = true
     local recipe = recipes[name]
     if not recipe then return false end -- TODO pretty this
@@ -152,7 +156,8 @@ function learnRecipe(self, event, button, x, y)
     local empty = {4, 8, 12, 13, 14, 15, 16}
     for _,i in ipairs(empty) do
         if turtle.getItemDetail(i) ~= nil then
-            return help()
+            log("Only put items in the top left 3x3 grid")
+            return false
         end
     end
     local recipe = {items={}, type="crafting_table"}
@@ -166,7 +171,7 @@ function learnRecipe(self, event, button, x, y)
         end
     end
     if counter == 0 then
-        return help()
+        log("Invalid recipe")
     end
     -- craft in last slot
     turtle.select(16)
@@ -177,7 +182,7 @@ function learnRecipe(self, event, button, x, y)
         if not request.ok then
             log(request.error)
         else
-            printColor("New recipe [" .. recipe["name"] .. "] learned.", colors.green)
+            log("New recipe [" .. recipe["name"] .. "] learned.")
         end
     else
         log("Invalid recipe")
