@@ -179,9 +179,7 @@ function learnRecipe(self, event, button, x, y)
         recipe["name"]  = turtle.getItemDetail(16).name
         recipe["count"] = turtle.getItemDetail(16).count
         local request = sendMessage({endpoint="add", recipe=recipe}, modem)
-        if not request.ok then
-            log(request.error)
-        else
+        if request.ok then
             log("New recipe [" .. recipe["name"] .. "] learned.")
         end
     else

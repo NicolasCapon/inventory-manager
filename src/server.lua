@@ -34,15 +34,27 @@ function scanRemoteInventory(remote)
 end 
 
 function scanAll()
+    monitor.clear()
+    monitor.setTextColor(colors.white)
+    monitor.setBackgroundColor(colors.red)
     -- Populate inventory
     -- TODO make progress bar
     local remotes = modem.getNamesRemote()
+    local toScan = {}
     for i, remote in pairs(remotes) do
         if ALLOWED_INVENTORIES[modem.getTypeRemote(remote)] then
-            print("Scanning " .. remote .. "...")
-            scanRemoteInventory(remote)
+            table.insert(toScan, remote)
         end
     end
+    for i, inv in ipairs(toScan) do
+        scanRemoteInventory(inv)
+        monitor.setCursorPos(1, 1)
+        monitor.write("[" .. tostring(i) .. "/" .. tostring(#toScan) .. "] Loading")
+        monitor.setCursorPos(1, 2)
+        monitor.write("inventory...")
+        print("Scanning " .. inv .. "...")
+    end
+    monitor.setBackgroundColor(colors.black)
 end
 
 function sendResponse(client, response)
@@ -238,7 +250,7 @@ function removeExcessiveItems(recipe)
 end
 
 function saveRecipe(recipe)
-    if recipes[recipe] ~= nil then
+    if recipes[recipe.name] ~= nil then
         -- recipe already exist print error
         return {ok=false, response=recipe, error="Recipe already exists"}
     end
