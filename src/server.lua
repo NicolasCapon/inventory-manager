@@ -3,6 +3,7 @@ local monitor = peripheral.find("monitor") or error("No monitor attached", 0)
 peripheral.find("modem", rednet.open)
 
 RECIPES_FILE = "recipes.txt"
+LOG_FILE = "server.log"
 ALLOWED_INVENTORIES = {}
 ALLOWED_INVENTORIES["minecraft:chest"] = true
 ALLOWED_INVENTORIES["metalbarrels:gold_tile"] = true
@@ -10,6 +11,12 @@ ALLOWED_INVENTORIES["metalbarrels:gold_tile"] = true
 recipes = {}
 inventory = {}
 free = {}
+
+function log(message)
+    local file = fs.open(LOG_FILE, "a")
+    file.write(textutils.serialize(message, { compact = true }) .. "\n")
+    file.close()
+end
 
 function scanRemoteInventory(remote)
     -- scan remote inventory and populate global inventory
@@ -435,29 +442,34 @@ end
 
 -- TODO xpcall sendResponse()
 function decodeMessage(message, client)
+    local response
     if message.endpoint == "get" then
-        return sendResponse(client, get(message.item, message.count, message.from, message.slot))
+        response = get(message.item, message.count, message.from, message.slot)
     elseif message.endpoint == "info" then
         progressBar("DU")
-        return sendResponse(client, {ok=true, response=inventory})
+        response = {ok=true, response=inventory}
     elseif message.endpoint == "clean" then
-        return sendResponse(client, clearGrid(message.from))
+        response = clearGrid(message.from)
     elseif message.endpoint == "put" then
-        return sendResponse(client, put(message.item, message.count, message.from, message.slot))
+        response = put(message.item, message.count, message.from, message.slot)
     elseif message.endpoint == "recipes" then
-        return sendResponse(client, {ok=true, response=recipes})
+        response = {ok=true, response=recipes}
     elseif message.endpoint == "make" then
-        sendResponse(client, getAvailability(message.recipe, message.count))
+        response = getAvailability(message.recipe, message.count)
     elseif message.endpoint == "add" then
-        sendResponse(client, saveRecipe(message.recipe))
+        response = saveRecipe(message.recipe)
     end
+    log("response:")
+    log(response)
+    sendResponse(client, response)
 end
 
 function handleRequests()
     while true do
         client, message = rednet.receive("INVENTORY")
         if client ~= nil then 
-            print(textutils.serialize(message))
+            log("request:")
+            log(message)
             decodeMessage(message, client)
         end
     end

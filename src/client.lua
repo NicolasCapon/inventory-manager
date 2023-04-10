@@ -181,6 +181,7 @@ function learnRecipe(self, event, button, x, y)
         local request = sendMessage({endpoint="add", recipe=recipe}, modem)
         if request.ok then
             log("New recipe [" .. recipe["name"] .. "] learned.")
+            updateInventory()
         end
     else
         log("Invalid recipe")
