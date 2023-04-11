@@ -7,6 +7,7 @@ LOG_FILE = "server.log"
 ALLOWED_INVENTORIES = {}
 ALLOWED_INVENTORIES["minecraft:chest"] = true
 ALLOWED_INVENTORIES["metalbarrels:gold_tile"] = true
+variableLimit = false
 
 recipes = {}
 inventory = {}
@@ -18,23 +19,26 @@ function log(message)
     file.close()
 end
 
-function scanRemoteInventory(remote)
+function scanRemoteInventory(remote, variableLimit)
     -- scan remote inventory and populate global inventory
     local chest = peripheral.wrap(remote)
     for cslot=1,chest.size() do
         local item = chest.getItemDetail(cslot)
-        local limit = chest.getItemLimit(cslot)
         if item == nil then
             -- no item, add this slot to free slots
+            local limit = 64
+            if variableLimit then
+                limit = chest.getItemLimit(cslot)
+            end
             table.insert(free, {chest=remote, slot={index=cslot, limit=limit}})
         else
             local slots = inventory[item.name]
             if slots == nil then
                 -- new item, add it and its associated slot
-                inventory[item.name] = {{chest=remote, slot={index=cslot, limit=limit, count=item.count}}}
+                inventory[item.name] = {{chest=remote, slot={index=cslot, limit=item.maxCount, count=item.count}}}
             else
                 -- item already listed, add this slot only
-                table.insert(inventory[item.name], {chest=remote, slot={index=cslot, limit=limit, count=item.count}})
+                table.insert(inventory[item.name], {chest=remote, slot={index=cslot, limit=item.maxCount, count=item.count}})
             end
         end
     end
@@ -71,6 +75,7 @@ function sendResponse(client, response)
 end
 
 function get(name, count, turtle, turtleSlot)
+    -- TODO optimize by breaking the loop and call clearInventory only at the end
     local item = inventory[name]
     if item == nil then
         local error = name .. " not found"
@@ -102,12 +107,12 @@ function get(name, count, turtle, turtleSlot)
                 -- add free slot, remove inventory slot and update count
                 table.insert(free, {chest=chest, slot={index=location.slot.index, limit=location.slot.limit}})
                 -- table.remove(inventory[name], i) -- TODO remove slots at the end
-                inventory[name][i].status = "TO_REMOVE"
                 count = count - inventory_count
+                inventory[name][i].status = "TO_REMOVE"
+                inventory[name] = clearInventory(inventory[name])
             end
         end
         -- if not enough items, clear what was still extracted
-        inventory[name] = clearInventory(inventory[name])
         if count > 0 then
             local error = "Not enough " .. name .. ", missing " .. count
             return {ok=false, response={name=name, count=count}, error=error}
@@ -139,10 +144,16 @@ function fuzzyFindItems(name)
     return items
 end
 
-function put_in_free_slot(name, count, turtle, turtleSlot)
+function put_in_free_slot(name, count, maxCount, turtle, turtleSlot)
+    -- TODO optimize by breaking the loop and call clearInventory only at the end
     for i, fslot in ipairs(free) do
         local chest = fslot.chest
         local limit = fslot.slot.limit
+        if limit > maxCount then
+            -- If this type of item cannot support the max of this slot, use
+            -- item limit instead
+            limit = maxCount
+        end
         local left = limit - count
         if left > -1 then
             -- put does not exceed item limit for this free slot
@@ -157,26 +168,26 @@ function put_in_free_slot(name, count, turtle, turtleSlot)
         else
             -- put exceed slot limit, put max and continue loop
             modem.callRemote(chest, "pullItems", turtle, turtleSlot, limit, fslot.slot.index)
-            -- update inventory and free
+            -- update inventory
             table.insert(inventory[name], {chest=chest, slot={index=fslot.slot.index, limit=limit, count=limit}})
-            -- table.remove(free, i) -- TODO mark this and call ArrayRemove
-            free[i].status = "TO_REMOVE"
+            -- remove free slot
             count = count - limit
+            free[i].status = "TO_REMOVE"
+            free = clearInventory(free)
         end
     end
-    free = clearInventory(free)
     if free == nil then free = {} end
     return {ok=false, response={name=name, count=count}, error="Not enough free space"}
 end
 
-function put(name, count, turtle, turtleSlot)
+function put(name, count, maxCount, turtle, turtleSlot)
     local item = inventory[name] 
     if item == nil then
         -- if item not in inventory, fill free slots
         inventory[name] = {}
-        return put_in_free_slot(name, count, turtle, turtleSlot)
+        return put_in_free_slot(name, count, maxCount, turtle, turtleSlot)
     else
-        -- if inventory contains item
+        -- try to fill already used slots
         for i, islot in ipairs(item) do
             local available = islot.slot.limit - islot.slot.count
             if available > 0 then
@@ -197,7 +208,7 @@ function put(name, count, turtle, turtleSlot)
         end
         if count > 0 then
             -- use free space
-            return put_in_free_slot(name, count, turtle, turtleSlot)
+            return put_in_free_slot(name, count, maxCount, turtle, turtleSlot)
         end
     end
 end
@@ -223,25 +234,6 @@ function clearInventory(input)
     end
     if not next(input) then input = nil end
     return input
-end
-
-function clearGrid(turtleName)
-    -- put each item in turtle grid into inventory, return false if put fails
-    local status = true
-    local responses = {}
-    local turtle = peripheral.wrap(turtleName)
-    for i=1,16 do
-        local item = modem.callRemote(turtle, "getItemDetail")
-        if item ~= nil then
-            -- slot not empty, put in inventory
-            local response = put(item.name, item.count, turtle)
-            table.insert(responses, response)
-            if not response.ok then
-                status = false
-            end
-        end
-    end
-    return {ok=status, response=responses, error=""}
 end
 
 function removeExcessiveItems(recipe)
@@ -448,10 +440,8 @@ function decodeMessage(message, client)
     elseif message.endpoint == "info" then
         progressBar("DU")
         response = {ok=true, response=inventory}
-    elseif message.endpoint == "clean" then
-        response = clearGrid(message.from)
     elseif message.endpoint == "put" then
-        response = put(message.item, message.count, message.from, message.slot)
+        response = put(message.item.name, message.item.count, message.item.maxCount, message.from, message.slot)
     elseif message.endpoint == "recipes" then
         response = {ok=true, response=recipes}
     elseif message.endpoint == "make" then
@@ -480,4 +470,3 @@ loadRecipes()
 progressBar("DU")
 print("Waiting for clients requests...")
 handleRequests()
-

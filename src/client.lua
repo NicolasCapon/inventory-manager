@@ -192,7 +192,7 @@ function dump(self, event, button, x, y)
     for i=1,16 do
         local item = turtle.getItemDetail(i)
         if item ~= nil then
-            local message = {endpoint="put", item=item.name, count=item.count, slot=i}
+            local message = {endpoint="put", item=item, slot=i}
             local request = sendMessage(message, modem)
             if not request.ok then
                 log(request.error)
