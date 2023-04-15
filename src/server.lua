@@ -87,27 +87,25 @@ function get(name, count, turtle, turtleSlot)
             local left = inventory_count - count
             if left > 0 then
                 -- Enough items in this slot
-                modem.callRemote(chest, "pushItems", turtle, location.slot.index, count, turtleSlot)
+                local num = modem.callRemote(chest, "pushItems", turtle, location.slot.index, count, turtleSlot)
                 -- update inventory
-                inventory[name][i]["slot"]["count"] = left
+                inventory[name][i]["slot"]["count"] = inventory_count - tonumber(num)
                 return {ok=true, response={name=name, count=count}, error=""}
             elseif left == 0 then
                 -- just enough item
-                modem.callRemote(chest, "pushItems", turtle, location.slot.index, item.count, turtleSlot)
+                local num = modem.callRemote(chest, "pushItems", turtle, location.slot.index, count, turtleSlot)
                 -- add free slot and remove inventory slot
                 table.insert(free, {chest=chest, slot={index=location.slot.index, limit=location.slot.limit}})
-                -- table.remove(inventory[name], i) -- TODO remove slots at the end
                 inventory[name][i].status = "TO_REMOVE"
                 inventory[name][i]["slot"]["count"] = left
                 inventory[name] = clearInventory(inventory[name])
                 return {ok=true, response={name=name, count=count}, error=""}
             else
                 -- not enough items get the maximum for this slot and continue the loop
-                modem.callRemote(chest, "pushItems", turtle, location.slot.index, inventory_count, turtleSlot)
+                local num = modem.callRemote(chest, "pushItems", turtle, location.slot.index, inventory_count, turtleSlot)
                 -- add free slot, remove inventory slot and update count
                 table.insert(free, {chest=chest, slot={index=location.slot.index, limit=location.slot.limit}})
-                -- table.remove(inventory[name], i) -- TODO remove slots at the end
-                count = count - inventory_count
+                count = count - tonumber(num)
                 inventory[name][i].status = "TO_REMOVE"
                 inventory[name] = clearInventory(inventory[name])
             end
@@ -133,19 +131,9 @@ function loadRecipes()
     print( n .. " recipes loaded from ".. RECIPES_FILE)
 end
 
-function fuzzyFindItems(name)
-    local items = {}
-    for key, value in pairs(inventory) do
-        -- if key.find(name) then
-        if key == name then
-            table.insert(items, key)
-        end
-    end
-    return items
-end
-
 function put_in_free_slot(name, count, maxCount, turtle, turtleSlot)
     -- TODO optimize by breaking the loop and call clearInventory only at the end
+    maxCount = maxCount or 64
     for i, fslot in ipairs(free) do
         local chest = fslot.chest
         local limit = fslot.slot.limit
@@ -157,9 +145,9 @@ function put_in_free_slot(name, count, maxCount, turtle, turtleSlot)
         local left = limit - count
         if left > -1 then
             -- put does not exceed item limit for this free slot
-            modem.callRemote(fslot.chest, "pullItems", turtle, turtleSlot, count, fslot.slot.index)
+            local num = modem.callRemote(fslot.chest, "pullItems", turtle, turtleSlot, count, fslot.slot.index)
             -- add item in inventory
-            table.insert(inventory[name], {chest=chest, slot={index=fslot.slot.index, limit=limit, count=count}})
+            table.insert(inventory[name], {chest=chest, slot={index=fslot.slot.index, limit=limit, count=tonumber(num)}})
             free[i].status = "TO_REMOVE"
             -- update free
             free = clearInventory(free)
@@ -167,15 +155,17 @@ function put_in_free_slot(name, count, maxCount, turtle, turtleSlot)
             return {ok=true, response={name=name, count=count}, error=""}
         else
             -- put exceed slot limit, put max and continue loop
-            modem.callRemote(chest, "pullItems", turtle, turtleSlot, limit, fslot.slot.index)
+            local num = modem.callRemote(chest, "pullItems", turtle, turtleSlot, limit, fslot.slot.index)
             -- update inventory
-            table.insert(inventory[name], {chest=chest, slot={index=fslot.slot.index, limit=limit, count=limit}})
+            table.insert(inventory[name], {chest=chest, slot={index=fslot.slot.index, limit=limit, count=tonumber(num)}})
             -- remove free slot
-            count = count - limit
+            print("free", num)
+            count = count - num
             free[i].status = "TO_REMOVE"
             free = clearInventory(free)
         end
     end
+    print("No free space")
     if free == nil then free = {} end
     return {ok=false, response={name=name, count=count}, error="Not enough free space"}
 end
@@ -195,14 +185,16 @@ function put(name, count, maxCount, turtle, turtleSlot)
                 -- free space available in this slot
                 if left > -1 then
                     -- free space for this slot is enough
-                    modem.callRemote(islot.chest, "pullItems", turtle, turtleSlot, count, islot.slot.index)
-                    inventory[name][i]["slot"]["count"] = islot.slot.count + count
+                    local num = modem.callRemote(islot.chest, "pullItems", turtle, turtleSlot, count, islot.slot.index)
+                    inventory[name][i]["slot"]["count"] = islot.slot.count + tonumber(num)
                     return {ok=true, response={name=name, count=count}, error=""}
                 else
                     -- not enough space, put max and continue
-                    modem.callRemote(islot.chest, "pullItems", turtle, turtleSlot, available, islot.slot.index)
-                    inventory[name][i]["slot"]["count"] = islot.slot.limit
-                    count = count - available
+                    local num = modem.callRemote(islot.chest, "pullItems", turtle, turtleSlot, available, islot.slot.index)
+                    num = tonumber(num)
+                    print("put 2", num)
+                    inventory[name][i]["slot"]["count"] = islot.slot.count + num
+                    count = count - num
                 end
             end
         end
@@ -215,7 +207,6 @@ end
 
 function clearInventory(input)
     local n=#input
-
     for i=1,n do
         if input[i].status == "TO_REMOVE" then
             input[i]=nil
@@ -449,8 +440,8 @@ function decodeMessage(message, client)
     elseif message.endpoint == "add" then
         response = saveRecipe(message.recipe)
     end
-    log("response:")
-    log(response)
+    -- log("response:")
+    -- log(response)
     sendResponse(client, response)
 end
 
@@ -458,8 +449,8 @@ function handleRequests()
     while true do
         client, message = rednet.receive("INVENTORY")
         if client ~= nil then 
-            log("request:")
-            log(message)
+            -- log("request:")
+            -- log(message)
             decodeMessage(message, client)
         end
     end
