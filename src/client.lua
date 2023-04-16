@@ -1,4 +1,3 @@
-local utils = require("utils")
 local basalt = require("basalt")
 
 local modem = peripheral.find("modem") or error("No modem attached", 0)
@@ -8,6 +7,31 @@ listIsFiltered = false
 inventory = {} -- dict
 recipes = {} -- dict
 items = {}
+
+function sendMessage(message, modem)
+    local SERVER = 6 --TODO put real computer ID here
+    local PROTOCOL = "INVENTORY"
+    local TIMEOUT = 5
+
+    message["from"] = modem.getNameLocal()
+    rednet.send(SERVER, message, PROTOCOL)
+    local id, response = rednet.receive(PROTOCOL, TIMEOUT)
+    if not id then
+        response = {ok=false, response={}, error="Server not responding"}
+        log(response.error)
+    elseif not response.ok then
+        log(response.error)
+    end
+    return response
+end
+
+function getItemCount(item)
+    local total = 0
+    for _, s in ipairs(item) do
+        total = total + s.slot.count
+    end
+    return total
+end
 
 function log(message, keep)
     if not keep then basalt.debugList:clear() end
