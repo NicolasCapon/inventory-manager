@@ -75,7 +75,7 @@ function sendResponse(client, response)
 end
 
 function get(name, count, turtle, turtleSlot)
-    -- TODO optimize by breaking the loop and call clearInventory only at the end
+    -- TODO optimize by using while loop ?
     local item = inventory[name]
     if item == nil then
         local error = name .. " not found"
@@ -87,19 +87,23 @@ function get(name, count, turtle, turtleSlot)
             local left = inventory_count - count
             if left > 0 then
                 -- Enough items in this slot
-                local num = modem.callRemote(chest, "pushItems", turtle, location.slot.index, count, turtleSlot)
+                local num = tonumber(modem.callRemote(chest, "pushItems", turtle, location.slot.index, count, turtleSlot))
                 -- update inventory
-                inventory[name][i]["slot"]["count"] = inventory_count - tonumber(num)
-                return {ok=true, response={name=name, count=count}, error=""}
+                inventory[name][i]["slot"]["count"] = inventory_count - num
+                count = count - num
+                if count == 0 then break end
             elseif left == 0 then
                 -- just enough item
-                local num = modem.callRemote(chest, "pushItems", turtle, location.slot.index, count, turtleSlot)
+                local num = tonumber(modem.callRemote(chest, "pushItems", turtle, location.slot.index, count, turtleSlot))
                 -- add free slot and remove inventory slot
-                table.insert(free, {chest=chest, slot={index=location.slot.index, limit=location.slot.limit}})
-                inventory[name][i].status = "TO_REMOVE"
-                inventory[name][i]["slot"]["count"] = left
-                inventory[name] = clearInventory(inventory[name])
-                return {ok=true, response={name=name, count=count}, error=""}
+                count = count - num
+                local slot_count = inventory_count - num
+                inventory[name][i]["slot"]["count"] = slot_count
+                if slot_count == 0 then
+                    table.insert(free, {chest=chest, slot={index=location.slot.index, limit=location.slot.limit}})
+                    inventory[name][i].status = "TO_REMOVE"
+                end
+                if count == 0 then break end
             else
                 -- not enough items get the maximum for this slot and continue the loop
                 local num = modem.callRemote(chest, "pushItems", turtle, location.slot.index, inventory_count, turtleSlot)
@@ -107,13 +111,15 @@ function get(name, count, turtle, turtleSlot)
                 table.insert(free, {chest=chest, slot={index=location.slot.index, limit=location.slot.limit}})
                 count = count - tonumber(num)
                 inventory[name][i].status = "TO_REMOVE"
-                inventory[name] = clearInventory(inventory[name])
             end
         end
         -- if not enough items, clear what was still extracted
+        inventory[name] = clearInventory(inventory[name])
         if count > 0 then
             local error = "Not enough " .. name .. ", missing " .. count
             return {ok=false, response={name=name, count=count}, error=error}
+        else
+            return {ok=true, response={name=name, count=count}, error=""}
         end
     end
 end
