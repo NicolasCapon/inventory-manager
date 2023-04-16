@@ -3,15 +3,22 @@ local monitor = peripheral.find("monitor") or error("No monitor attached", 0)
 peripheral.find("modem", rednet.open)
 
 RECIPES_FILE = "recipes.txt"
+JOBS_FILE = "jobs.txt"
+CRON_FILE = "cron.txt"
 LOG_FILE = "server.log"
 ALLOWED_INVENTORIES = {}
 ALLOWED_INVENTORIES["minecraft:chest"] = true
 ALLOWED_INVENTORIES["metalbarrels:gold_tile"] = true
+
 variableLimit = false
 
+inventoryChests = {}
 recipes = {}
 inventory = {}
 free = {}
+io_inventories = {}
+jobs = {}
+cronjobs = {}
 
 function log(message)
     local file = fs.open(LOG_FILE, "a")
@@ -51,16 +58,15 @@ function scanAll()
     -- Populate inventory
     -- TODO make progress bar
     local remotes = modem.getNamesRemote()
-    local toScan = {}
     for i, remote in pairs(remotes) do
-        if ALLOWED_INVENTORIES[modem.getTypeRemote(remote)] then
-            table.insert(toScan, remote)
+        if (ALLOWED_INVENTORIES[modem.getTypeRemote(remote)] and io_inventories[remote] == nil) then
+            table.insert(inventoryChests, remote)
         end
     end
-    for i, inv in ipairs(toScan) do
+    for i, inv in ipairs(inventoryChests) do
         scanRemoteInventory(inv)
         monitor.setCursorPos(1, 1)
-        monitor.write("[" .. tostring(i) .. "/" .. tostring(#toScan) .. "] Loading")
+        monitor.write("[" .. tostring(i) .. "/" .. tostring(#inventoryChests) .. "] Loading")
         monitor.setCursorPos(1, 2)
         monitor.write("inventory...")
         print("Scanning " .. inv .. "...")
@@ -76,6 +82,7 @@ end
 
 function get(name, count, turtle, turtleSlot)
     -- TODO optimize by using while loop ?
+    -- TODO: xpcall on callRemote
     local item = inventory[name]
     if item == nil then
         local error = name .. " not found"
@@ -124,11 +131,35 @@ function get(name, count, turtle, turtleSlot)
     end
 end
 
+function loadJobs()
+    local n = 0
+    if not fs.exists(JOBS_FILE) then return {} end
+    for line in io.lines(JOBS_FILE) do
+        local job = textutils.unserialize(line)
+        for _, task in ipairs(job.tasks) do
+            io_inventories[task.params.location] = true
+        end
+        jobs[job.name] = job.tasks
+        n = n + 1
+    end
+    print(n .. " jobs loaded from " .. JOBS_FILE)
+end
+
+function loadCronJobs()
+    local n = 0
+    if not fs.exists(CRON_FILE) then return {} end
+    for line in io.lines(CRON_FILE) do
+        local job = textutils.unserialize(line)
+        io_inventories[job.name] = true
+        cronjobs[job.name] = job.task
+        n = n + 1
+    end
+    print(n .. " cron loaded from " .. CRON_FILE)
+end
+
 function loadRecipes()
-    local keyset = {}
     local n = 0
     if not fs.exists(RECIPES_FILE) then return {} end
-    local lines = {}
     for line in io.lines(RECIPES_FILE) do
         local recipe = textutils.unserialize(line)
         recipes[recipe.name] = recipe 
@@ -437,6 +468,8 @@ function decodeMessage(message, client)
     elseif message.endpoint == "info" then
         progressBar("DU")
         response = {ok=true, response=inventory}
+    elseif message.endpoint == "inventoryChests" then
+        response = {ok=true, response=inventoryChests}
     elseif message.endpoint == "put" then
         response = put(message.item.name, message.item.count, message.item.maxCount, message.from, message.slot)
     elseif message.endpoint == "recipes" then
@@ -445,9 +478,17 @@ function decodeMessage(message, client)
         response = getAvailability(message.recipe, message.count)
     elseif message.endpoint == "add" then
         response = saveRecipe(message.recipe)
+    elseif message.endpoint == "jobs" then
+        response = {ok=true, response=jobs}
+    elseif message.endpoint == "cronjobs" then
+        response = {ok=true, response=cronjobs}
+    elseif message.endpoint == "addCronJob" then
+        response = addCronJob(message.job)
+    elseif message.endpoint == "addJob" then
+        response = addJob(message.job)
+    elseif message.endpoint == "execJob" then
+        response = execJob(message.job, message.count)
     end
-    -- log("response:")
-    -- log(response)
     sendResponse(client, response)
 end
 
@@ -455,15 +496,121 @@ function handleRequests()
     while true do
         client, message = rednet.receive("INVENTORY")
         if client ~= nil then 
-            -- log("request:")
-            -- log(message)
             decodeMessage(message, client)
         end
     end
 end
 
+function addCronJob(job)
+    -- TODO verify job
+    -- Exemple: job = {inventory="minecraft:chest_1", task="listenInventory"}
+    table.insert(cronjobs, job)
+    local response
+    if not cronjobs[job.name] then
+        cronjobs[job.name] = job.task
+        local file = fs.open(CRON_FILE, "a")
+        file.write(textutils.serialize(job, { compact = true }) .. "\n")
+        file.close()
+        response = {ok=true, response=job}
+    else
+        response = {ok=false, response=job, error="Job with same name exists"}
+    end
+    return response
+end
+
+function addJob(job)
+    -- TODO verify job (if for job.tasks, if not task in accepted task then return)
+    -- Example: {name="oak_planks", tasks={{exec=sendItemToInventory, params=...}}
+    local response
+    if not jobs[job.name] then
+        jobs[job.name] = job.tasks
+        local file = fs.open(JOBS_FILE, "a")
+        file.write(textutils.serialize(job, { compact = true }) .. "\n")
+        file.close()
+        response = {ok=true, response=job}
+    else
+        response = {ok=false, response=job, error="Job with this name already exists"}
+    end
+    return response
+end
+
+function execAllCronJobs()
+    while true do
+        local crons = {}
+        for key, value in pairs(cronjobs) do
+            if value == "listenInventory" then
+                local fn = function() listenInventory(key) end
+                table.insert(crons, fn)
+            end
+        end
+        parallel.waitForAll(table.unpack(crons))
+        os.sleep(5)
+    end
+end
+
+-- Return a copy of a simple table
+function copy(obj)
+    if type(obj) ~= 'table' then return obj end
+    local res = {}
+    for k, v in pairs(obj) do res[copy(k)] = copy(v) end
+    return res
+end
+
+-- Execute all tasks of given job, if n then multiply count for each tasks by n
+function execJob(job, n)
+    if not jobs[job] then return {ok=false, error="No job for name: ".. job} end
+    job = jobs[job]
+    n = n or 1
+    local status = true
+    local error = ""
+    print("number of tasks:", #job)
+    print(textutils.serialize(job))
+    for _, task in ipairs(job) do
+        local p = copy(task["params"])
+        p["count"] = p["count"] or 1
+        p["count"] = p["count"] * n
+        if task.exec == "sendItemToInventory" then
+            local request = sendItemToInventory(p)
+            if not request.ok then 
+                status = false
+                error = error .. "[" .. request.error .. "] "
+            end
+        end
+    end
+    return {ok=status, response={job=job, count=count}, error=error}
+end
+
+-- Job function
+function sendItemToInventory(...)
+    local args = ...
+    if not args["item"] then return end
+    if not args["location"] then return end
+    local count = args.count or 1
+    print(textutils.serialize(args))
+    return get(args["item"], count, args["location"], args["slot"])
+end
+
+-- Cron Job function
+function listenInventory(inv)
+    -- Listen only for first slots
+    -- TODO: add log when pcall catch an error
+    n = 1
+    local ok, item = pcall(modem.callRemote, inv, "getItemDetail", n)
+    while (ok and item) do
+        local request = put(item.name, item.count, item.maxCount, inv, n)
+        if not request.ok then
+            return request
+        end
+        n = n + 1
+        ok, item = pcall(modem.callRemote, inv, "getItemDetail", n)
+    end
+    return {ok=true, response=inv}
+end
+
+loadJobs()
+loadCronJobs()
 scanAll()
 loadRecipes()
 progressBar("DU")
 print("Waiting for clients requests...")
-handleRequests()
+parallel.waitForAll(handleRequests, execAllCronJobs)

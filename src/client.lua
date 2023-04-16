@@ -39,6 +39,7 @@ function log(message, keep)
 end
 
 function updateInventory()
+    -- TODO make a endpoint for getting these 3 requests in 1
     local request = sendMessage({endpoint="info"}, modem)
     if request.ok then
         inventory = request.response
@@ -47,7 +48,11 @@ function updateInventory()
     if requestRecipes.ok then
         recipes = requestRecipes.response
     end
-    return request.ok and requestRecipes.ok
+    local requestJobs = sendMessage({endpoint="jobs"}, modem)
+    if requestJobs.ok then
+        jobs = requestJobs.response
+    end
+    return (request.ok and requestRecipes.ok and requestJobs.ok)
 end
 
 -- Update items in list based on a string filter
@@ -84,6 +89,10 @@ function updateItemsList(filter)
                 itemsList:addItem("%\t" .. key)
             end
         end
+    end
+    for key, value in pairs(jobs) do
+        table.insert(items, key)
+        itemsList:addItem("@\t" .. key, colors.lime)
     end
 end
 
@@ -288,12 +297,20 @@ function isRecipe(name)
     return string.sub(name, 1, 1) == "%"
 end
 
+function isJob(name)
+    return string.sub(name, 1, 1) == "@"
+end
+
 function getSelectedItem(self, event, button, x, y)
     local index = itemsList:getItemIndex()
     local selectedItem = items[index]
     local count = tonumber(countInput:getValue())
-    if isRecipe(itemsList:getItem(index).text) then
+    local selectedItemText = itemsList:getItem(index).text
+    if isRecipe(selectedItemText) then
         make(selectedItem, count)
+    elseif isJob(selectedItemText) then
+        local message = {endpoint="execJob", job=selectedItem, count=count}
+        if not sendMessage(message, modem).ok then return false end
     else
         if not get(selectedItem, count) then return false end
     end
