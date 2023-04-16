@@ -56,7 +56,6 @@ function scanAll()
     monitor.setTextColor(colors.white)
     monitor.setBackgroundColor(colors.red)
     -- Populate inventory
-    -- TODO make progress bar
     local remotes = modem.getNamesRemote()
     for i, remote in pairs(remotes) do
         if (ALLOWED_INVENTORIES[modem.getTypeRemote(remote)] and io_inventories[remote] == nil) then
@@ -82,7 +81,7 @@ end
 
 function get(name, count, turtle, turtleSlot)
     -- TODO optimize by using while loop ?
-    -- TODO: xpcall on callRemote
+    -- TODO: pcall on callRemote
     local item = inventory[name]
     if item == nil then
         local error = name .. " not found"
@@ -169,7 +168,6 @@ function loadRecipes()
 end
 
 function put_in_free_slot(name, count, maxCount, turtle, turtleSlot)
-    -- TODO optimize by breaking the loop and call clearInventory only at the end
     maxCount = maxCount or 64
     for i, fslot in ipairs(free) do
         local chest = fslot.chest
@@ -460,7 +458,7 @@ function getDoableRecipes(inventory, recipes)
     return doableRecipes
 end
 
--- TODO xpcall sendResponse()
+-- TODO pcall sendResponse()
 function decodeMessage(message, client)
     local response
     if message.endpoint == "get" then
@@ -543,6 +541,7 @@ function execAllCronJobs()
                 table.insert(crons, fn)
             end
         end
+        print("Exec " .. #crons .. " job(s)")
         parallel.waitForAll(table.unpack(crons))
         os.sleep(5)
     end
@@ -563,8 +562,6 @@ function execJob(job, n)
     n = n or 1
     local status = true
     local error = ""
-    print("number of tasks:", #job)
-    print(textutils.serialize(job))
     for _, task in ipairs(job) do
         local p = copy(task["params"])
         p["count"] = p["count"] or 1
