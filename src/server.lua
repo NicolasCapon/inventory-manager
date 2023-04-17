@@ -93,14 +93,22 @@ function get(name, count, turtle, turtleSlot)
             local left = inventory_count - count
             if left > 0 then
                 -- Enough items in this slot
-                local num = tonumber(modem.callRemote(chest, "pushItems", turtle, location.slot.index, count, turtleSlot))
+                local ok, ret = pcall(modem.callRemote, chest, "pushItems", turtle, location.slot.index, count, turtleSlot)
+                if not ok then
+                    return {ok=false, response={name=name, count=count}, error=ret}
+                end
+                local num = tonumber(ret)
                 -- update inventory
                 inventory[name][i]["slot"]["count"] = inventory_count - num
                 count = count - num
                 if count == 0 then break end
             elseif left == 0 then
                 -- just enough item
-                local num = tonumber(modem.callRemote(chest, "pushItems", turtle, location.slot.index, count, turtleSlot))
+                local ok, ret = pcall(modem.callRemote, chest, "pushItems", turtle, location.slot.index, count, turtleSlot)
+                if not ok then
+                    return {ok=false, response={name=name, count=count}, error=ret}
+                end
+                local num = tonumber(ret)
                 -- add free slot and remove inventory slot
                 count = count - num
                 local slot_count = inventory_count - num
@@ -112,10 +120,14 @@ function get(name, count, turtle, turtleSlot)
                 if count == 0 then break end
             else
                 -- not enough items get the maximum for this slot and continue the loop
-                local num = modem.callRemote(chest, "pushItems", turtle, location.slot.index, inventory_count, turtleSlot)
+                local ok, ret = pcall(modem.callRemote, chest, "pushItems", turtle, location.slot.index, inventory_count, turtleSlot)
+                if not ok then
+                    return {ok=false, response={name=name, count=count}, error=ret}
+                end
+                local num = tonumber(ret)
                 -- add free slot, remove inventory slot and update count
                 table.insert(free, {chest=chest, slot={index=location.slot.index, limit=location.slot.limit}})
-                count = count - tonumber(num)
+                count = count - num
                 inventory[name][i].status = "TO_REMOVE"
             end
         end
@@ -180,29 +192,41 @@ function put_in_free_slot(name, count, maxCount, turtle, turtleSlot)
         local left = limit - count
         if left > -1 then
             -- put does not exceed item limit for this free slot
-            local num = modem.callRemote(fslot.chest, "pullItems", turtle, turtleSlot, count, fslot.slot.index)
+            local ok, ret = pcall(modem.callRemote, fslot.chest, "pullItems", turtle, turtleSlot, count, fslot.slot.index)
+            if not ok then
+                -- if error occurs, clean free and stop
+                free = clearInventory(free) or {}
+                return {ok=false, response={name=name, count=count, maxCount=maxCount, turtle=turtle, turtleSlot=turtleSlot}, error=ret}
+            end
+            local num = tonumber(ret)
             -- add item in inventory
-            table.insert(inventory[name], {chest=chest, slot={index=fslot.slot.index, limit=limit, count=tonumber(num)}})
+            table.insert(inventory[name], {chest=chest, slot={index=fslot.slot.index, limit=limit, count=num}})
             free[i].status = "TO_REMOVE"
             -- update free
-            free = clearInventory(free)
-            if free == nil then free = {} end
-            return {ok=true, response={name=name, count=count}, error=""}
+            count = count - num
+            if count == 0 then break end
         else
             -- put exceed slot limit, put max and continue loop
-            local num = modem.callRemote(chest, "pullItems", turtle, turtleSlot, limit, fslot.slot.index)
+            local ok, ret = pcall(modem.callRemote, chest, "pullItems", turtle, turtleSlot, limit, fslot.slot.index)
+            if not ok then
+                -- if error occurs, clean free and stop
+                free = clearInventory(free) or {}
+                return {ok=false, response={name=name, count=count, maxCount=maxCount, turtle=turtle, turtleSlot=turtleSlot}, error=ret}
+            end
+            local num = tonumber(ret)
             -- update inventory
-            table.insert(inventory[name], {chest=chest, slot={index=fslot.slot.index, limit=limit, count=tonumber(num)}})
+            table.insert(inventory[name], {chest=chest, slot={index=fslot.slot.index, limit=limit, count=num}})
             -- remove free slot
-            print("free", num)
             count = count - num
             free[i].status = "TO_REMOVE"
-            free = clearInventory(free)
         end
     end
-    print("No free space")
-    if free == nil then free = {} end
-    return {ok=false, response={name=name, count=count}, error="Not enough free space"}
+    free = clearInventory(free) or {}
+    if count > 0 then
+        return {ok=false, response={name=name, count=count, maxCount=maxCount, turtle=turtle, turtleSlot=turtleSlot}, error="Not enough free space"}
+    else
+        return {ok=true, response={name=name, count=count, maxCount=maxCount, turtle=turtle, turtleSlot=turtleSlot}}
+    end
 end
 
 function put(name, count, maxCount, turtle, turtleSlot)
@@ -220,14 +244,22 @@ function put(name, count, maxCount, turtle, turtleSlot)
                 -- free space available in this slot
                 if left > -1 then
                     -- free space for this slot is enough
-                    local num = modem.callRemote(islot.chest, "pullItems", turtle, turtleSlot, count, islot.slot.index)
-                    inventory[name][i]["slot"]["count"] = islot.slot.count + tonumber(num)
+                    local ok, ret = pcall(modem.callRemote, islot.chest, "pullItems", turtle, turtleSlot, count, islot.slot.index)
+                    if not ok then
+                        -- if error occurs, stop immediately
+                        return {ok=false, response={name=name, count=count, maxCount=maxCount, turtle=turtle, turtleSlot=turtleSlot}, error=ret}
+                    end
+                    local num = tonumber(ret)
+                    inventory[name][i]["slot"]["count"] = islot.slot.count + num
                     return {ok=true, response={name=name, count=count}, error=""}
                 else
                     -- not enough space, put max and continue
-                    local num = modem.callRemote(islot.chest, "pullItems", turtle, turtleSlot, available, islot.slot.index)
-                    num = tonumber(num)
-                    print("put 2", num)
+                    local ok, ret = pcall(modem.callRemote, islot.chest, "pullItems", turtle, turtleSlot, available, islot.slot.index)
+                    if not ok then
+                        -- if error occurs, stop immediately
+                        return {ok=false, response={name=name, count=count, maxCount=maxCount, turtle=turtle, turtleSlot=turtleSlot}, error=ret}
+                    end
+                    local num = tonumber(ret)
                     inventory[name][i]["slot"]["count"] = islot.slot.count + num
                     count = count - num
                 end
@@ -583,7 +615,6 @@ function sendItemToInventory(...)
     if not args["item"] then return end
     if not args["location"] then return end
     local count = args.count or 1
-    print(textutils.serialize(args))
     return get(args["item"], count, args["location"], args["slot"])
 end
 
