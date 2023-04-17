@@ -136,6 +136,12 @@ function readCount()
     return tonumber(count) or 1
 end
 
+function readSlot()
+    writeColor("Choose slot on chest (default=1)\n")
+    local count = read(nil, nil, nil, "1")
+    return tonumber(count) or 1
+end
+
 function readJobName()
     writeColor("Choose name for this job:\n")
     local name = read(nil, nil, function(text) return completion.choice(text, itemsName) end)
@@ -151,8 +157,9 @@ function addTask(tasklist)
     local item = readItemName()
     local location = readInventory()
     local count = readCount()
+    local slot = readSlot()
     if (item and location) then
-        local params = {item=item, count=count, location=location}
+        local params = {item=item, count=count, location=location, slot=slot}
         table.insert(tasklist, {exec="sendItemToInventory", params=params}) 
         return true
     end
