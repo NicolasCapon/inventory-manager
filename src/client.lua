@@ -76,6 +76,13 @@ function updateItemsList(filter)
                 end
             end
         end
+        -- Display jobs
+        for key, value in pairs(jobs) do
+            if string.find(key, filter) then
+                table.insert(items, key)
+                itemsList:addItem("@\t" .. key, colors.lime)
+            end
+        end
     else
         for key, value in pairs(inventory) do
             table.insert(items, key)
@@ -89,10 +96,11 @@ function updateItemsList(filter)
                 itemsList:addItem("%\t" .. key)
             end
         end
-    end
-    for key, value in pairs(jobs) do
-        table.insert(items, key)
-        itemsList:addItem("@\t" .. key, colors.lime)
+        -- Display jobs
+        for key, value in pairs(jobs) do
+            table.insert(items, key)
+            itemsList:addItem("@\t" .. key, colors.lime)
+        end
     end
 end
 
