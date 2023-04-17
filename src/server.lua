@@ -52,25 +52,16 @@ function scanRemoteInventory(remote, variableLimit)
 end 
 
 function scanAll()
-    monitor.clear()
-    monitor.setTextColor(colors.white)
-    monitor.setBackgroundColor(colors.red)
     -- Populate inventory
     local remotes = modem.getNamesRemote()
+    local scans = {}
     for i, remote in pairs(remotes) do
         if (ALLOWED_INVENTORIES[modem.getTypeRemote(remote)] and io_inventories[remote] == nil) then
             table.insert(inventoryChests, remote)
+            table.insert(scans, function() scanRemoteInventory(remote) end)
         end
     end
-    for i, inv in ipairs(inventoryChests) do
-        scanRemoteInventory(inv)
-        monitor.setCursorPos(1, 1)
-        monitor.write("[" .. tostring(i) .. "/" .. tostring(#inventoryChests) .. "] Loading")
-        monitor.setCursorPos(1, 2)
-        monitor.write("inventory...")
-        print("Scanning " .. inv .. "...")
-    end
-    monitor.setBackgroundColor(colors.black)
+    parallel.waitForAll(table.unpack(scans))
 end
 
 function sendResponse(client, response)
