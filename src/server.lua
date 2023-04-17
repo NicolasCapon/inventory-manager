@@ -498,6 +498,9 @@ function decodeMessage(message, client)
     elseif message.endpoint == "info" then
         progressBar("DU")
         response = {ok=true, response=inventory}
+    elseif message.endpoint == "all" then
+        progressBar("DU")
+        response = {ok=true, response={inventory=inventory, recipes=recipes, jobs=jobs}}
     elseif message.endpoint == "inventoryChests" then
         response = {ok=true, response=inventoryChests}
     elseif message.endpoint == "put" then

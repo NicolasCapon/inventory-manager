@@ -38,21 +38,14 @@ function log(message, keep)
     basalt.debug(textutils.serialize(message))
 end
 
-function updateInventory()
-    -- TODO make a endpoint for getting these 3 requests in 1
-    local request = sendMessage({endpoint="info"}, modem)
+function sync()
+    local request = sendMessage({endpoint="all"}, modem)
     if request.ok then
-        inventory = request.response
+        inventory = request.response.inventory
+        recipes = request.response.recipes
+        jobs = request.response.jobs
     end
-    local requestRecipes = sendMessage({endpoint="recipes"}, modem)
-    if requestRecipes.ok then
-        recipes = requestRecipes.response
-    end
-    local requestJobs = sendMessage({endpoint="jobs"}, modem)
-    if requestJobs.ok then
-        jobs = requestJobs.response
-    end
-    return (request.ok and requestRecipes.ok and requestJobs.ok)
+    return request.ok
 end
 
 -- Update items in list based on a string filter
@@ -222,7 +215,7 @@ function learnRecipe(self, event, button, x, y)
         local request = sendMessage({endpoint="add", recipe=recipe}, modem)
         if request.ok then
             log("New recipe [" .. recipe["name"] .. "] learned.")
-            updateInventory()
+            sync()
         end
     else
         log("Invalid recipe")
@@ -244,7 +237,7 @@ function dump(self, event, button, x, y)
     end
     if self then
         -- Avoid calling this when using this function without handler
-        updateInventory()
+        sync()
         updateItemsList()
         input:setValue("")
         countInput:setValue(1)
@@ -327,7 +320,7 @@ function getSelectedItem(self, event, button, x, y)
     input:setValue("")
     countInput:setValue(1)
     main:setFocusedObject(input)
-    updateInventory()
+    sync()
     updateItemsList()
     countInput:setValue(1)
     itemsList:selectItem(1)
@@ -377,7 +370,7 @@ function refresh(self, event, button, x, y)
     input:setValue("")
     countInput:setValue(1)
     main:setFocusedObject(input)
-    updateInventory()
+    sync()
     updateItemsList()
     countInput:setValue(1)
     itemsList:selectItem(1)
@@ -396,7 +389,7 @@ main:getObject("learnButton"):onClick(learnRecipe)
 main:getObject("refreshButton"):onClick(refresh)
 main:setFocusedObject(input)
 
-updateInventory()
+sync()
 updateItemsList()
 
 basalt.autoUpdate()
