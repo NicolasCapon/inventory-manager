@@ -35,29 +35,15 @@ end
 -- a CRON declaration
 -- cron = {name="minecraft:chest_13", task="listenInventory"}
 
-function listUsedChests()
-    local usedChests = {}
-    local message = {endpoint="inventoryChests"}
+function listUnusedChests()
+    local unusedChests = {}
+    local message = {endpoint="satelliteChests"}
     rednet.send(SERVER, message, PROTOCOL)
     local id, response = rednet.receive(PROTOCOL, TIMEOUT)
     if response.ok then
-        for _, chest in ipairs(response.response) do
-            usedChests[chest] = true
-        end
+        unusedChests = response.response
     end
-    return usedChests
-end
-
-function listUnusedChests()
-    local used = listUsedChests()
-    local allc = modem.getNamesRemote()
-    local unused = {}
-    for _, remote in ipairs(modem.getNamesRemote()) do
-        if not used[remote] then
-            table.insert(unused, remote)
-        end
-    end
-    return unused
+    return unusedChests
 end
 
 function getExistingJobs()

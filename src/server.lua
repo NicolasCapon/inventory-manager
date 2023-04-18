@@ -12,7 +12,7 @@ ALLOWED_INVENTORIES["metalbarrels:gold_tile"] = true
 
 variableLimit = false
 
-inventoryChests = {}
+inventoryChests = {} -- Chests used for storing items
 recipes = {}
 inventory = {}
 free = {}
@@ -51,13 +51,26 @@ function scanRemoteInventory(remote, variableLimit)
     end
 end 
 
+function listSatelliteChests()
+    -- satelliteChests are for importing/exporting items in the core inventory
+    -- They are mainly used by jobs
+    -- Call this method only after scanAll first call
+    local satelliteChests = {}
+    for _, remote in ipairs(modem.getNamesRemote()) do
+        if not inventoryChests[remote] then
+            satelliteChests[remote] = true
+        end
+    end
+    return satelliteChests
+end
+
 function scanAll()
     -- Populate inventory
     local remotes = modem.getNamesRemote()
     local scans = {}
     for i, remote in pairs(remotes) do
         if (ALLOWED_INVENTORIES[modem.getTypeRemote(remote)] and io_inventories[remote] == nil) then
-            table.insert(inventoryChests, remote)
+            inventoryChests[remote] = true
             table.insert(scans, function() scanRemoteInventory(remote) end)
         end
     end
@@ -494,6 +507,8 @@ function decodeMessage(message, client)
         response = {ok=true, response={inventory=inventory, recipes=recipes, jobs=jobs}}
     elseif message.endpoint == "inventoryChests" then
         response = {ok=true, response=inventoryChests}
+    elseif message.endpoint == "satelliteChests" then
+        response = {ok=true, response=listSatelliteChests()}
     elseif message.endpoint == "put" then
         response = put(message.item.name, message.item.count, message.item.maxCount, message.from, message.slot)
     elseif message.endpoint == "recipes" then

@@ -117,13 +117,12 @@ function make(name, count)
     end
     local recursive = true
     local recipe = recipes[name]
-    if not recipe then return false end -- TODO pretty this
+    if not recipe then return false end
     local dependencies = {}
     local request = sendMessage({endpoint="make", recipe=recipe, count=count}, modem) 
     if request.ok then
         dependencies = request.response.dependencies
     else
-        -- TODO show error message
         log("Click to see what's missing\n" .. textutils.serialize(request.error))
         return false
     end
@@ -302,13 +301,12 @@ function isJob(name)
     return string.sub(name, 1, 1) == "@"
 end
 
--- show a frame dynamically created to get missing liveParams for a job
+-- Show a frame dynamically created to get missing liveParams for a job
 function invokeLiveParamsPopup(job, liveParams)
-    -- TODO: selfDestroy: list all basaltObject to destroy them later
-    -- TODO: sendMessage to server (OK button)
-    -- TODO: add missing functionnalities to other params (count, location...)
-    -- TODO: clean code
     -- TODO: Isolate in a separate file ?
+    -- Collect all basalt object for this popup to be destroyed later on
+    local basaltObjects = {}
+    -- Create a UI bloc and return a function to collect item name
     local function createItemBloc(y, frame, text)
         local list
         local function filter(self, event, key)
@@ -322,99 +320,147 @@ function invokeLiveParamsPopup(job, liveParams)
                 end
             end
         end
-        frame:addLabel():setText(text):setPosition(1, y)
+        table.insert(basaltObjects, frame:addLabel():setText(text)
+                                                    :setPosition(1, y))
         y = y + 1
-        frame:addInput():setPosition(1, y):setSize("parent.w", 1):setBackground(colors.white):onChange(filter)
+        table.insert(basaltObjects, frame:addInput():setPosition(1, y)
+                                                    :setSize("parent.w", 1)
+                                                    :setBackground(colors.white)
+                                                    :onChange(filter))
         y = y + 1
-        list = frame:addList():setPosition(1, y):setSize("parent.w", 3):setBackground(colors.yellow)
+        local valueObj = frame:addList():setPosition(1, y)
+                                        :setSize("parent.w", 3)
+                                        :setBackground(colors.yellow)
+        table.insert(basaltObjects, valueObj)
         for key, value in pairs(inventory) do
             list:addItem(key)
         end
         y = y + 1
         local function getValue()
-            return list:getValue().text
+            return valueObj:getValue().text
         end
         return getValue
     end
 
+    -- Create a UI bloc and return a function to collect item count
     local function createCountBloc(y, frame, text)
-        -- TODO return the getValue function
-        frame:addLabel():setText(text):setPosition(1, y)
+        table.insert(basaltObjects, frame:addLabel():setText(text)
+                                                    :setPosition(1, y))
         y = y + 1
-        frame:addInput():setPosition(1, y):setSize("parent.w", 1):setBackground(colors.white)
+        local valueObj = frame:addInput():setInputType("number")
+                                           :setPosition(1, y)
+                                           :setSize("parent.w", 1)
+                                           :setBackground(colors.white))
+        table.insert(basaltObjects, valueObj)
         y = y + 1
+        local function getValue()
+            return valueObj:getValue()
+        end
+        return getValue
     end
 
+    -- Create a UI bloc and return a function to collect destination chest
     local function createLocationBloc(y, frame, text)
-        -- TODO return the getValue function
-        frame:addLabel():setText(text):setPosition(1, y)
+        -- TODO call server for unused chests
+        table.insert(basaltObjects, frame:addLabel():setText(text)
+                                                    :setPosition(1, y))
         y = y + 1
-        local dropDown = frame:addDropdown():setPosition(1, y):setSize("parent.w - 1", 1):setBackground(colors.white)
+        local valueObj = frame:addDropdown():setPosition(1, y)
+                                            :setSize("parent.w - 1", 1)
+                                            :setBackground(colors.white)
+        table.insert(basaltObjects, valueObj)
+        -- Request chests names and add them as items to the dropDown
+        local satelliteChests = {}
+        local message = {endpoint="satelliteChests"}
+        local request = sendMessage(message, modem)
+        if request.ok then
+            satelliteChests = request.response
+        end
+        for _, chest in ipairs(satelliteChests) do
+            valueObj:addItem(chest)
+        end
         y = y + 1
+        local function getValue()
+            return valueObj:getValue()
+        end
+        return getValue()
     end
 
-    local f = main:addFrame("liveParams"):setSize("parent.w", "parent.h"):setScrollable()
-    local params = {}
-    local labels = {}
-    local y = 1
-    local getValues = {}
+    -- Create popup frame
+    local f = main:addFrame("liveParams"):setSize("parent.w", "parent.h")
+                                         :setScrollable()
+    -- params is a list of table where each item of the list is a table of
+    -- functions for collecting params of each task
+    local params = {} 
+    local getValueFns = {}
+    local y = 1 -- store y value for dynamically construct UI
     for i, task in ipairs(liveParams) do
-        table.insert(labels, f:addLabel():setText("Task " .. i):setPosition(1, y):setForeground(colors.orange):setSize("parent.w", 1):setBackground(colors.blue))
+        -- dynamically construct the UI by looping through tasks
+        table.insert(basaltObjects, f:addLabel():setText("Task " .. i)
+                                                :setPosition(1, y)
+                                                :setForeground(colors.orange)
+                                                :setSize("parent.w", 1)
+                                                :setBackground(colors.blue))
         y = y + 1
         for param, value in pairs(task) do
             if param == "item" then
-                getValues[param] = createItemBloc(y, f, "Item name")
+                getValueFns[param] = createItemBloc(y, f, "Item name")
             elseif param == "count" then
-                getValues[param] = createItemBloc(y, f, "Item count")
+                getValueFns[param] = createItemBloc(y, f, "Item count")
             elseif param == "location" then
-                getValues[param] = createLocationBloc(y, f, "Destination chest")
+                getValueFns[param] = createLocationBloc(y, f, "Destination chest")
             end
         end
-        table.insert(params, getValues)
+        table.insert(params, getValueFns)
     end
+
+    -- Function to destroy this popup
     local function selfDestroy()
-        -- main:removeObject("liveParams")
-        -- main:removeObject("cancelLive")
-        -- for _, taskInput in ipairs(inputs) do
-        --     for key, value in pairs(taskInput) do
-        --         main:removeObject(value:getName())
-        --     end
-        -- end
-        -- for _, label in ipairs(labels) do
-        --     main:removeObject(label:getName())
-        -- end
-        main:remove(f)
+        for _, obj in ipairs(basaltObjects) do
+            main:remove(obj)
+        end
     end
 
     -- Button functions
-    local function collectInputs() 
+    local function collectValues() 
+        local endParams = {}
+        -- Collect values of each UI Objects of interest
         for _, task in ipairs(params) do
-            for p, func in pairs(getValues) do
-                log(p .. ", " .. func())
-                -- TODO save params
+            for p, fn in pairs(getValueFns) do
+                -- log(p .. ", " .. fn()) TODO remove after testing
+                endParams[p] = fn()
             end
         end
-        -- TODO Verify inputs
-        -- TODO Send message here
-        selfDestroy()
+        -- Submit the job with collected live params
+        local message = {endpoint="execJob", job=selectedItem, count=count, params=endParams}
+        local request = sendMessage(message, modem)
+        if request.ok then
+            selfDestroy() -- We dont need the popup anymore, destroy it
+        else
+            log(request.error)
+        end
     end
+
     local function cancel()
         params = nil
         selfDestroy()
     end
+
     -- Finally add buttons
     local buttonOK = f:addButton("okLive")
                       :setText("OK")
-                      :onClick(collectInputs)
+                      :onClick(collectValues)
                       :setPosition("parent.w - 9", "parent.h")
                       :setSize(10, 1)
                       :setBackground(colors.green)
+    table.insert(basaltObjects, buttonOK)
     local buttonKO = f:addButton("cancelLive")
                       :setText("Cancel")
                       :setPosition(1, "parent.h")
                       :setSize(10, 1)
                       :setBackground(colors.red)
                       :onClick(cancel)
+    table.insert(basaltObjects, buttonKO)
     return params
 end
 
@@ -448,7 +494,7 @@ function getSelectedItem(self, event, button, x, y)
         make(selectedItem, count)
     elseif isJob(selectedItemText) then
         if getLiveParams(jobs[selectedItem]) then
-            return true -- Dont update and set focus to main frame
+            return true -- Dont update and dont set focus to main frame
         else
             local message = {endpoint="execJob", job=selectedItem, count=count}
             if not sendMessage(message, modem).ok then return false end
