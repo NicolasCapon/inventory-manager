@@ -100,10 +100,14 @@ function readInventory()
     writeColor("choose inventory to apply this\n")
     local inv = read(nil, nil, function(text) return completion.choice(text, unusedChests) end)
     local status = false
-    for _, chest in ipairs(unusedChests) do
-        if chest == inv then
-            status = true
-            break
+    if inv == "*" then
+        status = true
+    else
+        for _, chest in ipairs(unusedChests) do
+            if chest == inv then
+                status = true
+                break
+            end
         end
     end
     if not status then
@@ -117,10 +121,14 @@ function readItemName()
     writeColor("Choose item name\n")
     local it = read(nil, nil, function(text) return completion.choice(text, itemsName) end)
     status = false
-    for _, item in ipairs(itemsName) do
-        if it == item then
-            status = true
-            break
+    if it == "*" then
+        status = true
+    else
+        for _, item in ipairs(itemsName) do
+            if it == item then
+                status = true
+                break
+            end
         end
     end
     if not status then
@@ -133,7 +141,7 @@ end
 function readCount()
     writeColor("Choose quantity to move (default=1)\n")
     local count = read(nil, nil, nil, "1")
-    return tonumber(count) or 1
+    return tonumber(count) or "*"
 end
 
 function readSlot()
@@ -170,6 +178,7 @@ local jobtype = read(nil, nil, nil, "r")
 if jobtype ~= "c" then jobtype = "r" end
 
 if jobtype == "r" then
+    -- TODO: if no chest available display message
     -- Regular job
     local job = {name=readJobName(), tasks={}}
     if not addTask(job["tasks"]) then return false end
@@ -180,7 +189,7 @@ if jobtype == "r" then
     end
     local resp = addJob(job)
     if resp.ok then
-        writeColor("Successfully added job", colors.green)
+        writeColor("Successfully added job\n", colors.green)
     else
         writeColor(resp.error .. "\n")
     end

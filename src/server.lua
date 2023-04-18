@@ -511,7 +511,7 @@ function decodeMessage(message, client)
     elseif message.endpoint == "addJob" then
         response = addJob(message.job)
     elseif message.endpoint == "execJob" then
-        response = execJob(message.job, message.count)
+        response = execJob(message.job, message.params, message.count)
     end
     sendResponse(client, response)
 end
@@ -582,14 +582,25 @@ function copy(obj)
 end
 
 -- Execute all tasks of given job, if n then multiply count for each tasks by n
-function execJob(job, n)
-    if not jobs[job] then return {ok=false, error="No job for name: ".. job} end
-    job = jobs[job]
+-- liveParams override parameters for the tasks if provided. This param should
+-- be a list of table with same length as job.tasks
+function execJob(name, liveParams, n)
+    if not jobs[name] then return {ok=false, error="No job for name: ".. name} end
+    local job = jobs[name]
+    -- set defaults
+    liveParams = liveParams or {{}} -- List of table
     n = n or 1
     local status = true
     local error = ""
-    for _, task in ipairs(job) do
+    -- Exec each task for given job
+    for i, task in ipairs(job) do
         local p = copy(task["params"])
+        -- Override with liveParams if not nil
+        liveParams[i] = liveParams[i] or {} -- Default to empty table {}
+        for key, value in pairs(liveParams[i]) do
+            p[key] = value
+        end
+        -- Apply multiplier if we need to execJob n times (default=1)
         p["count"] = p["count"] or 1
         p["count"] = p["count"] * n
         if task.exec == "sendItemToInventory" then
@@ -605,6 +616,8 @@ end
 
 -- Job function
 function sendItemToInventory(...)
+    -- Take table as input:
+    -- {item=itemName, location=chestName, count=itemCount, slot=chestSlot}
     local args = ...
     if not args["item"] then return end
     if not args["location"] then return end

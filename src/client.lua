@@ -18,9 +18,9 @@ function sendMessage(message, modem)
     local id, response = rednet.receive(PROTOCOL, TIMEOUT)
     if not id then
         response = {ok=false, response={}, error="Server not responding"}
-        log(response.error)
+        log(response.error, true)
     elseif not response.ok then
-        log(response.error)
+        log(response.error, true)
     end
     return response
 end
@@ -302,6 +302,143 @@ function isJob(name)
     return string.sub(name, 1, 1) == "@"
 end
 
+-- show a frame dynamically created to get missing liveParams for a job
+function invokeLiveParamsPopup(job, liveParams)
+    -- TODO: selfDestroy: list all basaltObject to destroy them later
+    -- TODO: sendMessage to server (OK button)
+    -- TODO: add missing functionnalities to other params (count, location...)
+    -- TODO: clean code
+    -- TODO: Isolate in a separate file ?
+    local function createItemBloc(y, frame, text)
+        local list
+        local function filter(self, event, key)
+            local filter = self:getValue()
+            if filter:len() > 2 then
+                list:clear()
+                for key, value in pairs(inventory) do
+                    if string.find(key, filter) then
+                        list:addItem(key)
+                    end
+                end
+            end
+        end
+        frame:addLabel():setText(text):setPosition(1, y)
+        y = y + 1
+        frame:addInput():setPosition(1, y):setSize("parent.w", 1):setBackground(colors.white):onChange(filter)
+        y = y + 1
+        list = frame:addList():setPosition(1, y):setSize("parent.w", 3):setBackground(colors.yellow)
+        for key, value in pairs(inventory) do
+            list:addItem(key)
+        end
+        y = y + 1
+        local function getValue()
+            return list:getValue().text
+        end
+        return getValue
+    end
+
+    local function createCountBloc(y, frame, text)
+        -- TODO return the getValue function
+        frame:addLabel():setText(text):setPosition(1, y)
+        y = y + 1
+        frame:addInput():setPosition(1, y):setSize("parent.w", 1):setBackground(colors.white)
+        y = y + 1
+    end
+
+    local function createLocationBloc(y, frame, text)
+        -- TODO return the getValue function
+        frame:addLabel():setText(text):setPosition(1, y)
+        y = y + 1
+        local dropDown = frame:addDropdown():setPosition(1, y):setSize("parent.w - 1", 1):setBackground(colors.white)
+        y = y + 1
+    end
+
+    local f = main:addFrame("liveParams"):setSize("parent.w", "parent.h"):setScrollable()
+    local params = {}
+    local labels = {}
+    local y = 1
+    local getValues = {}
+    for i, task in ipairs(liveParams) do
+        table.insert(labels, f:addLabel():setText("Task " .. i):setPosition(1, y):setForeground(colors.orange):setSize("parent.w", 1):setBackground(colors.blue))
+        y = y + 1
+        for param, value in pairs(task) do
+            if param == "item" then
+                getValues[param] = createItemBloc(y, f, "Item name")
+            elseif param == "count" then
+                getValues[param] = createItemBloc(y, f, "Item count")
+            elseif param == "location" then
+                getValues[param] = createLocationBloc(y, f, "Destination chest")
+            end
+        end
+        table.insert(params, getValues)
+    end
+    local function selfDestroy()
+        -- main:removeObject("liveParams")
+        -- main:removeObject("cancelLive")
+        -- for _, taskInput in ipairs(inputs) do
+        --     for key, value in pairs(taskInput) do
+        --         main:removeObject(value:getName())
+        --     end
+        -- end
+        -- for _, label in ipairs(labels) do
+        --     main:removeObject(label:getName())
+        -- end
+        main:remove(f)
+    end
+
+    -- Button functions
+    local function collectInputs() 
+        for _, task in ipairs(params) do
+            for p, func in pairs(getValues) do
+                log(p .. ", " .. func())
+                -- TODO save params
+            end
+        end
+        -- TODO Verify inputs
+        -- TODO Send message here
+        selfDestroy()
+    end
+    local function cancel()
+        params = nil
+        selfDestroy()
+    end
+    -- Finally add buttons
+    local buttonOK = f:addButton("okLive")
+                      :setText("OK")
+                      :onClick(collectInputs)
+                      :setPosition("parent.w - 9", "parent.h")
+                      :setSize(10, 1)
+                      :setBackground(colors.green)
+    local buttonKO = f:addButton("cancelLive")
+                      :setText("Cancel")
+                      :setPosition(1, "parent.h")
+                      :setSize(10, 1)
+                      :setBackground(colors.red)
+                      :onClick(cancel)
+    return params
+end
+
+-- Verify if this job contains live parameters == "*"
+-- If it contains, then pop up the right frame to handle theses params
+function getLiveParams(job)
+    local atLeastOne = false
+    local liveParams = {}
+    for _, task in ipairs(job) do
+        local params = {}
+        for key, value in pairs(task.params) do
+            if value == "*" then
+                params[key] = value
+                atLeastOne = true
+            end
+        end
+        table.insert(liveParams, params)
+    end
+    if atLeastOne then
+        invokeLiveParamsPopup(job, liveParams)
+    end
+    return atLeastOne
+end
+
 function getSelectedItem(self, event, button, x, y)
     local index = itemsList:getItemIndex()
     local selectedItem = items[index]
@@ -310,8 +447,12 @@ function getSelectedItem(self, event, button, x, y)
     if isRecipe(selectedItemText) then
         make(selectedItem, count)
     elseif isJob(selectedItemText) then
-        local message = {endpoint="execJob", job=selectedItem, count=count}
-        if not sendMessage(message, modem).ok then return false end
+        if getLiveParams(jobs[selectedItem]) then
+            return true -- Dont update and set focus to main frame
+        else
+            local message = {endpoint="execJob", job=selectedItem, count=count}
+            if not sendMessage(message, modem).ok then return false end
+        end
     else
         if not get(selectedItem, count) then return false end
     end
