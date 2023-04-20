@@ -423,16 +423,18 @@ function invokeLiveParamsPopup(job, liveParams)
 
     -- Button functions
     local function collectValues() 
-        local endParams = {}
+        local jobParams = {}
         -- Collect values of each UI Objects of interest
         for _, task in ipairs(params) do
+            local taskParams = {}
             for p, fn in pairs(getValueFns) do
                 -- log(p .. ", " .. fn()) TODO remove after testing
-                endParams[p] = fn()
+                taskParams[p] = fn()
             end
+            table.insert(jobParams, taskParams)
         end
         -- Submit the job with collected live params
-        local message = {endpoint="execJob", job=selectedItem, count=count, params=endParams}
+        local message = {endpoint="execJob", job=selectedItem, count=count, params=jobParams}
         local request = sendMessage(message, modem)
         if request.ok then
             selfDestroy() -- We dont need the popup anymore, destroy it
