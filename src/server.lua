@@ -574,6 +574,10 @@ function addJob(job)
 end
 
 function execAllCronJobs()
+    -- TODO: fork https://github.com/cc-tweaked/CC-Tweaked/blob/5d7cbc8c64ea8f882d6ccb2688a2418a4e77d90e/projects/core/src/main/resources/data/computercraft/lua/rom/apis/parallel.lua#L148
+    -- To handle cron with differnt freq:
+    -- create a version of parallel that can handle adding/removing jobs while running
+    -- and continue going when 0 cron are scheduled
     while true do
         local crons = {}
         for key, value in pairs(cronjobs) do
@@ -644,7 +648,7 @@ end
 function listenInventory(inv)
     -- Listen only for first slots
     -- TODO: add log when pcall catch an error
-    n = 1
+    local n = 1
     local ok, item = pcall(modem.callRemote, inv, "getItemDetail", n)
     while (ok and item) do
         local request = put(item.name, item.count, item.maxCount, inv, n)
