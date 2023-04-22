@@ -31,8 +31,16 @@ TODO
 
 ## TODO
 
-- [ ] finish liveParams features
-- [ ] Fix bug when user input a wrong string in main input and press Enter/Get
+- [ ] finish liveParams features:
+    - [ ] keyboard navigation
+    - [ ] server removeJob option
+    - [ ] handle frequency on cron job
+    - [ ] newly added job need server restart to be active
+    - [ ] factorize job/cron methods on server.lua
+- [x] Fix bug when user input a wrong string in main input and press Enter/Get
+- [ ] Add log when user ask too many crafts
+- [ ] Handle count vs count in recipe if recipe provide more than one item
+- [ ] Handle items with nbt
 - [ ] add pocket computer support for calling jobs remotely
 - [x] Use return value from callRemote to verify if get/put are ok
 - [x] Clean code (remove unused function and utils.lua ?)

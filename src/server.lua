@@ -676,10 +676,11 @@ function listenInventory(...)
     local slot = args["slot"]
     if slot then
         -- If slot specified, only call put on that slot
-        local ok, item = pcall(modem.callRemote, inv, "getItemDetail", n)
+        local ok, item = pcall(modem.callRemote, inv, "getItemDetail", slot)
         if (ok and item) then
-            local request = put(item.name, item.count, item.maxCount, inv, n)
+            local request = put(item.name, item.count, item.maxCount, inv, slot)
             if not request.ok then
+                print(request.error)
                 return request
             else
                 return {ok=true, response=inv}

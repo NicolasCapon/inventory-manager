@@ -208,6 +208,7 @@ function learnRecipe(self, event, button, x, y)
     end
     -- craft in last slot
     turtle.select(16)
+    -- pcall here
     if turtle.craft() then
         recipe["name"]  = turtle.getItemDetail(16).name
         recipe["count"] = turtle.getItemDetail(16).count
@@ -399,18 +400,22 @@ function invokeLiveParamsPopup(job, liveParams)
     -- params is a list of table where each item of the list is a table of
     -- functions for collecting params of each task
     local params = {} 
-    local getValueFns = {}
     local y = 1 -- store y value for dynamically construct UI
     local first = true
     for i, task in ipairs(liveParams) do
         -- dynamically construct the UI by looping through tasks
-        table.insert(basaltObjects, f:addLabel():setText("Task " .. i)
-                                                :setPosition(1, y)
-                                                :setForeground(colors.orange)
-                                                :setSize("parent.w", 1)
-                                                :setBackground(colors.blue))
-        y = y + 1
+        local getValueFns = {}
+        local firstParam = true
         for param, value in pairs(task) do
+            if firstParam then
+                -- we need to construct this title inside the loop if liveParams = {}
+                table.insert(basaltObjects, f:addLabel():setText("Task " .. i)
+                                                        :setPosition(1, y)
+                                                        :setForeground(colors.orange)
+                                                        :setSize("parent.w", 1)
+                                                        :setBackground(colors.blue))
+                y = y + 1
+            end
             if param == "item" then
                 getValueFns[param] = createItemBloc(y, f, "Item name", first)
             elseif param == "count" then
@@ -438,8 +443,7 @@ function invokeLiveParamsPopup(job, liveParams)
         -- Collect values of each UI Objects of interest
         for _, task in ipairs(params) do
             local taskParams = {}
-            for p, fn in pairs(getValueFns) do
-                -- log(p .. ", " .. fn()) TODO remove after testing
+            for p, fn in pairs(task) do
                 taskParams[p] = fn()
             end
             table.insert(jobParams, taskParams)

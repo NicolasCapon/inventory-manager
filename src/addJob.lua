@@ -154,7 +154,7 @@ function addTask(tasklist)
     local item = readItemName()
     local location = readInventory()
     local count = readCount()
-    local slot = readSlot(1)
+    local slot = readSlot("1")
     if (item and location) then
         local params = {item=item, count=count, location=location, slot=slot}
         table.insert(tasklist, {exec="sendItemToInventory", params=params}) 
@@ -175,6 +175,8 @@ if jobtype == "r" then
     local more = read(nil, nil, nil, "n")
     while more == "y" do
         if not addTask(job["tasks"]) then return false end
+        writeColor("Would you like to add another task ? [y/n]\n")
+        more = read(nil, nil, nil, "n")
     end
     local resp = addJob(job)
     if resp.ok then
