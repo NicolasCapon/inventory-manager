@@ -4,4 +4,4 @@
 <button id="getButton" onClick="getSelectedItem" text="GET" x="parent.w - 9" y="parent.h - 1" width="10" height="1" bg="green"/>
 <button id="dumpButton" onClick="dump" text="DUMP" x="parent.w - 19" y="parent.h - 1" width="10" height="1" bg="red"/>
 <button id="learnButton" onClick="learnRecipe" text="CRAFT" x="parent.w - 29" y="parent.h - 1" width="10" height="1" bg="cyan"/>
-<button id="refreshButton" onClick="refresh" text="REFRESH" x="parent.w - 39" y="parent.h - 1" width="10" height="1" bg="gray"/>
+<button id="newJobButton" onClick="openNewJob" text="NEW JOB" x="parent.w - 39" y="parent.h - 1" width="10" height="1" bg="gray"/>

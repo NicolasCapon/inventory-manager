@@ -41,7 +41,9 @@ function listUnusedChests()
     rednet.send(SERVER, message, PROTOCOL)
     local id, response = rednet.receive(PROTOCOL, TIMEOUT)
     if response.ok then
-        unusedChests = response.response
+        for chest, value in pairs(response.response) do
+            table.insert(unusedChests, chest)
+        end
     end
     return unusedChests
 end
@@ -131,7 +133,8 @@ function readCount()
 end
 
 function readSlot(default)
-    writeColor("Choose slot on chest (default=".. default or "nil" ..")\n")
+    defaultstr = default or "nil"
+    writeColor("Choose slot on chest (default=".. defaultstr ..")\n")
     local count = read(nil, nil, nil, default)
     return tonumber(count) or default
 end

@@ -59,6 +59,7 @@ function listSatelliteChests()
     for _, remote in ipairs(modem.getNamesRemote()) do
         if not inventoryChests[remote] then
             satelliteChests[remote] = true
+            print(remote)
         end
     end
     return satelliteChests
@@ -98,9 +99,14 @@ function get(name, count, turtle, turtleSlot)
             if left > 0 then
                 -- Enough items in this slot
                 local ok, ret = pcall(modem.callRemote, chest, "pushItems", turtle, location.slot.index, count, turtleSlot)
-                if not ok then
+                if (not ok or ret == 0) then
+                    if ret == 0 then 
+                        ret = string.format("Cannot transfert %i %s from %s [slot %i] to %s [slot %i]",
+                                            count, name, chest, location.slot.index, turtle, turtleSlot or "any")
+                    end
                     return {ok=false, response={name=name, count=count}, error=ret}
                 end
+                print(type(ret))
                 local num = tonumber(ret)
                 -- update inventory
                 inventory[name][i]["slot"]["count"] = inventory_count - num
@@ -109,9 +115,14 @@ function get(name, count, turtle, turtleSlot)
             elseif left == 0 then
                 -- just enough item
                 local ok, ret = pcall(modem.callRemote, chest, "pushItems", turtle, location.slot.index, count, turtleSlot)
-                if not ok then
+                if (not ok or ret == 0) then
+                    if ret == 0 then 
+                        ret = string.format("Cannot transfert %i %s from %s (slot %i) to %s (slot %i)",
+                                            count, name, chest, location.slot.index, turtle, turtleSlot or "any")
+                    end
                     return {ok=false, response={name=name, count=count}, error=ret}
                 end
+                print(type(ret))
                 local num = tonumber(ret)
                 -- add free slot and remove inventory slot
                 count = count - num
@@ -125,9 +136,14 @@ function get(name, count, turtle, turtleSlot)
             else
                 -- not enough items get the maximum for this slot and continue the loop
                 local ok, ret = pcall(modem.callRemote, chest, "pushItems", turtle, location.slot.index, inventory_count, turtleSlot)
-                if not ok then
+                if (not ok or ret == 0) then
+                    if ret == 0 then 
+                        ret = string.format("Cannot transfert %i %s from %s [slot %i] to %s [slot %i]",
+                                            count, name, chest, location.slot.index, turtle, turtleSlot or "any")
+                    end
                     return {ok=false, response={name=name, count=count}, error=ret}
                 end
+                print(type(ret))
                 local num = tonumber(ret)
                 -- add free slot, remove inventory slot and update count
                 table.insert(free, {chest=chest, slot={index=location.slot.index, limit=location.slot.limit}})
@@ -155,7 +171,7 @@ function loadJobs()
         for _, task in ipairs(job.tasks) do
             io_inventories[task.params.location] = true
         end
-        jobs[job.name] = job.tasks
+        jobs[job.name] = job
         n = n + 1
     end
     print(n .. " jobs loaded from " .. JOBS_FILE)
@@ -170,7 +186,7 @@ function loadCronJobs()
         for _, task in ipairs(job.tasks) do
             io_inventories[task.params.location] = true
         end
-        cronjobs[job.name] = job.tasks
+        cronjobs[job.name] = job
         n = n + 1
     end
     print(n .. " cron loaded from " .. CRON_FILE)
@@ -206,6 +222,7 @@ function put_in_free_slot(name, count, maxCount, turtle, turtleSlot)
                 free = clearInventory(free) or {}
                 return {ok=false, response={name=name, count=count, maxCount=maxCount, turtle=turtle, turtleSlot=turtleSlot}, error=ret}
             end
+            print(type(ret))
             local num = tonumber(ret)
             -- add item in inventory
             table.insert(inventory[name], {chest=chest, slot={index=fslot.slot.index, limit=limit, count=num}})
@@ -221,6 +238,7 @@ function put_in_free_slot(name, count, maxCount, turtle, turtleSlot)
                 free = clearInventory(free) or {}
                 return {ok=false, response={name=name, count=count, maxCount=maxCount, turtle=turtle, turtleSlot=turtleSlot}, error=ret}
             end
+            print(type(ret))
             local num = tonumber(ret)
             -- update inventory
             table.insert(inventory[name], {chest=chest, slot={index=fslot.slot.index, limit=limit, count=num}})
@@ -257,6 +275,7 @@ function put(name, count, maxCount, turtle, turtleSlot)
                         -- if error occurs, stop immediately
                         return {ok=false, response={name=name, count=count, maxCount=maxCount, turtle=turtle, turtleSlot=turtleSlot}, error=ret}
                     end
+                    print(type(ret))
                     local num = tonumber(ret)
                     inventory[name][i]["slot"]["count"] = islot.slot.count + num
                     return {ok=true, response={name=name, count=count}, error=""}
@@ -267,6 +286,7 @@ function put(name, count, maxCount, turtle, turtleSlot)
                         -- if error occurs, stop immediately
                         return {ok=false, response={name=name, count=count, maxCount=maxCount, turtle=turtle, turtleSlot=turtleSlot}, error=ret}
                     end
+                    print(type(ret))
                     local num = tonumber(ret)
                     inventory[name][i]["slot"]["count"] = islot.slot.count + num
                     count = count - num
@@ -498,7 +518,6 @@ function getDoableRecipes(inventory, recipes)
     return doableRecipes
 end
 
--- TODO pcall sendResponse()
 function decodeMessage(message, client)
     local response
     if message.endpoint == "get" then
@@ -532,7 +551,8 @@ function decodeMessage(message, client)
     elseif message.endpoint == "execJob" then
         response = execJob(message.job, message.params, message.count)
     end
-    sendResponse(client, response)
+    local ok, err = pcall(sendResponse, client, response)
+    if not ok then print(err) end
 end
 
 function handleRequests()
@@ -549,7 +569,7 @@ function addCronJob(job)
     -- Exemple: job = {inventory="minecraft:chest_1", task="listenInventory"}
     local response
     if not cronjobs[job.name] then
-        cronjobs[job.name] = job.tasks
+        cronjobs[job.name] = job
         local file = fs.open(CRON_FILE, "a")
         file.write(textutils.serialize(job, { compact = true }) .. "\n")
         file.close()
@@ -565,7 +585,7 @@ function addJob(job)
     -- Example: {name="oak_planks", tasks={{exec=sendItemToInventory, params=...}}
     local response
     if not jobs[job.name] then
-        jobs[job.name] = job.tasks
+        jobs[job.name] = job
         local file = fs.open(JOBS_FILE, "a")
         file.write(textutils.serialize(job, { compact = true }) .. "\n")
         file.close()
@@ -583,13 +603,15 @@ function execAllCronJobs()
     -- and continue going when 0 cron are scheduled
     while true do
         local crons = {}
-        for _, task in pairs(cronjobs) do
-            if task.exec == "listenInventory" then
-                local fn = function() listenInventory(task.params) end
-                table.insert(crons, fn)
+        for name, job in pairs(cronjobs) do
+            for _, task in ipairs(job.tasks) do
+                if task.exec == "listenInventory" then
+                    local fn = function() listenInventory(task.params) end
+                    table.insert(crons, fn)
+                end
             end
         end
-        print("Exec " .. #crons .. " job(s)")
+        -- print("Exec " .. #crons .. " job(s)")
         parallel.waitForAll(table.unpack(crons))
         os.sleep(5)
     end
@@ -615,7 +637,7 @@ function execJob(name, liveParams, n)
     local status = true
     local error = ""
     -- Exec each task for given job
-    for i, task in ipairs(job) do
+    for i, task in ipairs(job.tasks) do
         local p = copy(task["params"])
         -- Override with liveParams if not nil
         liveParams[i] = liveParams[i] or {} -- Default to empty table {}

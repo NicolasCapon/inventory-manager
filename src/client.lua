@@ -241,7 +241,8 @@ function dump(self, event, button, x, y)
         input:setValue("")
         countInput:setValue(1)
         -- TODO make this works
-        main:setFocusedObject(input)
+        input:setFocus()
+        -- main:setFocusedObject(input)
     end
     return {ok=true, message="dump", error=""}
 end
@@ -307,35 +308,39 @@ function invokeLiveParamsPopup(job, liveParams)
     -- Collect all basalt object for this popup to be destroyed later on
     local basaltObjects = {}
     -- Create a UI bloc and return a function to collect item name
-    local function createItemBloc(y, frame, text)
-        local list
+    local function createItemBloc(y, frame, text, focus)
+        local valueObj = frame:addList():setPosition(1, y + 2)
+                                        :setSize("parent.w", 3)
+                                        :setBackground(colors.yellow)
+        table.insert(basaltObjects, valueObj)
         local function filter(self, event, key)
             local filter = self:getValue()
             if filter:len() > 2 then
-                list:clear()
+                valueObj:clear()
                 for key, value in pairs(inventory) do
                     if string.find(key, filter) then
-                        list:addItem(key)
+                        valueObj:addItem(key)
                     end
+                end
+            else
+                for key, value in pairs(inventory) do
+                    valueObj:addItem(key)
                 end
             end
         end
         table.insert(basaltObjects, frame:addLabel():setText(text)
                                                     :setPosition(1, y))
         y = y + 1
-        table.insert(basaltObjects, frame:addInput():setPosition(1, y)
-                                                    :setSize("parent.w", 1)
-                                                    :setBackground(colors.white)
-                                                    :onChange(filter))
-        y = y + 1
-        local valueObj = frame:addList():setPosition(1, y)
-                                        :setSize("parent.w", 3)
-                                        :setBackground(colors.yellow)
-        table.insert(basaltObjects, valueObj)
+        if focus then focus = "focus" end
+        table.insert(basaltObjects, frame:addInput(focus)
+                                         :setPosition(1, y)
+                                         :setSize("parent.w", 1)
+                                         :setBackground(colors.white)
+                                         :onChange(filter))
+        y = y + 2 -- also add +1 for valueObj that we set earlier
         for key, value in pairs(inventory) do
-            list:addItem(key)
+            valueObj:addItem(key)
         end
-        y = y + 1
         local function getValue()
             return valueObj:getValue().text
         end
@@ -343,14 +348,15 @@ function invokeLiveParamsPopup(job, liveParams)
     end
 
     -- Create a UI bloc and return a function to collect item count
-    local function createCountBloc(y, frame, text)
+    local function createCountBloc(y, frame, text, focus)
         table.insert(basaltObjects, frame:addLabel():setText(text)
                                                     :setPosition(1, y))
         y = y + 1
-        local valueObj = frame:addInput():setInputType("number")
-                                           :setPosition(1, y)
-                                           :setSize("parent.w", 1)
-                                           :setBackground(colors.white))
+        if focus then focus = "focus" end
+        local valueObj = frame:addInput(focus):setInputType("number")
+                                              :setPosition(1, y)
+                                              :setSize("parent.w", 1)
+                                              :setBackground(colors.white)
         table.insert(basaltObjects, valueObj)
         y = y + 1
         local function getValue()
@@ -360,14 +366,14 @@ function invokeLiveParamsPopup(job, liveParams)
     end
 
     -- Create a UI bloc and return a function to collect destination chest
-    local function createLocationBloc(y, frame, text)
-        -- TODO call server for unused chests
+    local function createLocationBloc(y, frame, text, focus)
         table.insert(basaltObjects, frame:addLabel():setText(text)
                                                     :setPosition(1, y))
         y = y + 1
-        local valueObj = frame:addDropdown():setPosition(1, y)
-                                            :setSize("parent.w - 1", 1)
-                                            :setBackground(colors.white)
+        if focus then focus = "focus" end
+        local valueObj = frame:addDropdown(focus):setPosition(1, y)
+                                                 :setSize("parent.w - 1", 1)
+                                                 :setBackground(colors.white)
         table.insert(basaltObjects, valueObj)
         -- Request chests names and add them as items to the dropDown
         local satelliteChests = {}
@@ -387,13 +393,15 @@ function invokeLiveParamsPopup(job, liveParams)
     end
 
     -- Create popup frame
-    local f = main:addFrame("liveParams"):setSize("parent.w", "parent.h")
-                                         :setScrollable()
+    local f = main:addFrame("popup"):setSize("parent.w", "parent.h")
+                                    :setScrollable()
+    table.insert(basaltObjects, f)
     -- params is a list of table where each item of the list is a table of
     -- functions for collecting params of each task
     local params = {} 
     local getValueFns = {}
     local y = 1 -- store y value for dynamically construct UI
+    local first = true
     for i, task in ipairs(liveParams) do
         -- dynamically construct the UI by looping through tasks
         table.insert(basaltObjects, f:addLabel():setText("Task " .. i)
@@ -404,21 +412,24 @@ function invokeLiveParamsPopup(job, liveParams)
         y = y + 1
         for param, value in pairs(task) do
             if param == "item" then
-                getValueFns[param] = createItemBloc(y, f, "Item name")
+                getValueFns[param] = createItemBloc(y, f, "Item name", first)
             elseif param == "count" then
-                getValueFns[param] = createItemBloc(y, f, "Item count")
+                getValueFns[param] = createItemBloc(y, f, "Item count", first)
             elseif param == "location" then
-                getValueFns[param] = createLocationBloc(y, f, "Destination chest")
+                getValueFns[param] = createLocationBloc(y, f, "Destination chest", first)
             end
+            if first then first = false end -- next tasks are not the first
         end
         table.insert(params, getValueFns)
     end
 
     -- Function to destroy this popup
     local function selfDestroy()
-        for _, obj in ipairs(basaltObjects) do
-            main:remove(obj)
-        end
+        f:remove()
+        -- TODO remove this function and basaltObjects var
+        -- for _, obj in ipairs(basaltObjects) do
+        --     main:removeObject(obj:getName())
+        -- end
     end
 
     -- Button functions
@@ -434,7 +445,7 @@ function invokeLiveParamsPopup(job, liveParams)
             table.insert(jobParams, taskParams)
         end
         -- Submit the job with collected live params
-        local message = {endpoint="execJob", job=selectedItem, count=count, params=jobParams}
+        local message = {endpoint="execJob", job=job.name, count=count, params=jobParams}
         local request = sendMessage(message, modem)
         if request.ok then
             selfDestroy() -- We dont need the popup anymore, destroy it
@@ -444,7 +455,6 @@ function invokeLiveParamsPopup(job, liveParams)
     end
 
     local function cancel()
-        params = nil
         selfDestroy()
     end
 
@@ -471,7 +481,7 @@ end
 function getLiveParams(job)
     local atLeastOne = false
     local liveParams = {}
-    for _, task in ipairs(job) do
+    for _, task in ipairs(job.tasks) do
         local params = {}
         for key, value in pairs(task.params) do
             if value == "*" then
@@ -491,11 +501,15 @@ function getSelectedItem(self, event, button, x, y)
     local index = itemsList:getItemIndex()
     local selectedItem = items[index]
     local count = tonumber(countInput:getValue())
+    if not itemsList:getItem(index) then
+        return false
+    end
     local selectedItemText = itemsList:getItem(index).text
     if isRecipe(selectedItemText) then
         make(selectedItem, count)
     elseif isJob(selectedItemText) then
         if getLiveParams(jobs[selectedItem]) then
+            main:getObject("popup"):setFocus():getObject("focus"):setFocus()
             return true -- Dont update and dont set focus to main frame
         else
             local message = {endpoint="execJob", job=selectedItem, count=count}
@@ -566,6 +580,38 @@ function refresh(self, event, button, x, y)
     itemsList:setOffset(0)
 end
 
+local function openNewJob()
+    local newJobFrame = main:addFrame("newJobFrame")
+        :setMovable()
+        :setSize("parent.w", "parent.h")
+        :setPosition(1, 1)
+        :setFocus()
+
+    newJobFrame:addLabel()
+        :setSize("parent.w", 1)
+        :setBackground(colors.black)
+        :setForeground(colors.lightGray)
+        :setText("New Job")
+
+    local newJobProg = newJobFrame:addProgram("newJobProg")
+        :setSize("parent.w", "parent.h - 1")
+        :setPosition(1, 2)
+        :onDone(function() newJobFrame:remove() end)
+        :setFocus()
+        :execute("addJob.lua")
+
+    newJobFrame:addButton()
+        :setSize(1, 1)
+        :setText("X")
+        :setBackground(colors.black)
+        :setForeground(colors.red)
+        :setPosition("parent.w", 1)
+        :onClick(function()
+            newJobFrame:remove()
+        end)
+    return newJobFrame
+end
+
 -- TODO try to apply local to these variables
 main = basalt.createFrame():addLayout("client.xml")
 input = main:getObject("input"):onKey(navigation):onChange(filterList)
@@ -575,7 +621,7 @@ itemsList = main:getObject("itemsList"):onKey(navigation)
 main:getObject("getButton"):onClick(getSelectedItem)
 main:getObject("dumpButton"):onClick(dump)
 main:getObject("learnButton"):onClick(learnRecipe)
-main:getObject("refreshButton"):onClick(refresh)
+main:getObject("newJobButton"):onClick(openNewJob)
 main:setFocusedObject(input)
 
 sync()
