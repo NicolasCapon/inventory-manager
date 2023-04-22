@@ -146,6 +146,7 @@ function get(name, count, turtle, turtleSlot)
     end
 end
 
+-- TODO factorize job and cron
 function loadJobs()
     local n = 0
     if not fs.exists(JOBS_FILE) then return {} end
@@ -160,13 +161,16 @@ function loadJobs()
     print(n .. " jobs loaded from " .. JOBS_FILE)
 end
 
+-- TODO factorize job and cron
 function loadCronJobs()
     local n = 0
     if not fs.exists(CRON_FILE) then return {} end
     for line in io.lines(CRON_FILE) do
         local job = textutils.unserialize(line)
-        io_inventories[job.name] = true
-        cronjobs[job.name] = job.task
+        for _, task in ipairs(job.tasks) do
+            io_inventories[task.params.location] = true
+        end
+        cronjobs[job.name] = job.tasks
         n = n + 1
     end
     print(n .. " cron loaded from " .. CRON_FILE)
@@ -543,10 +547,9 @@ end
 function addCronJob(job)
     -- TODO verify job
     -- Exemple: job = {inventory="minecraft:chest_1", task="listenInventory"}
-    table.insert(cronjobs, job)
     local response
     if not cronjobs[job.name] then
-        cronjobs[job.name] = job.task
+        cronjobs[job.name] = job.tasks
         local file = fs.open(CRON_FILE, "a")
         file.write(textutils.serialize(job, { compact = true }) .. "\n")
         file.close()
@@ -580,9 +583,9 @@ function execAllCronJobs()
     -- and continue going when 0 cron are scheduled
     while true do
         local crons = {}
-        for key, value in pairs(cronjobs) do
-            if value == "listenInventory" then
-                local fn = function() listenInventory(key) end
+        for _, task in pairs(cronjobs) do
+            if task.exec == "listenInventory" then
+                local fn = function() listenInventory(task.params) end
                 table.insert(crons, fn)
             end
         end
@@ -645,11 +648,28 @@ function sendItemToInventory(...)
 end
 
 -- Cron Job function
-function listenInventory(inv)
-    -- Listen only for first slots
-    -- TODO: add log when pcall catch an error
+function listenInventory(...)
+    local args = ...
+    local inv = args["location"]
+    local slot = args["slot"]
+    if slot then
+        -- If slot specified, only call put on that slot
+        local ok, item = pcall(modem.callRemote, inv, "getItemDetail", n)
+        if (ok and item) then
+            local request = put(item.name, item.count, item.maxCount, inv, n)
+            if not request.ok then
+                return request
+            else
+                return {ok=true, response=inv}
+            end
+        else
+            return {ok=false, response={inv=inv, slot=slot}, error=item}
+        end
+    end
+    -- Else, listen only for first slot until it encounter an empty slot
     local n = 1
     local ok, item = pcall(modem.callRemote, inv, "getItemDetail", n)
+    -- TODO: add log when pcall catch an error
     while (ok and item) do
         local request = put(item.name, item.count, item.maxCount, inv, n)
         if not request.ok then

@@ -130,10 +130,10 @@ function readCount()
     return tonumber(count) or "*"
 end
 
-function readSlot()
-    writeColor("Choose slot on chest (default=1)\n")
-    local count = read(nil, nil, nil, "1")
-    return tonumber(count) or 1
+function readSlot(default)
+    writeColor("Choose slot on chest (default=".. default or "nil" ..")\n")
+    local count = read(nil, nil, nil, default)
+    return tonumber(count) or default
 end
 
 function readJobName()
@@ -151,7 +151,7 @@ function addTask(tasklist)
     local item = readItemName()
     local location = readInventory()
     local count = readCount()
-    local slot = readSlot()
+    local slot = readSlot(1)
     if (item and location) then
         local params = {item=item, count=count, location=location, slot=slot}
         table.insert(tasklist, {exec="sendItemToInventory", params=params}) 
@@ -181,12 +181,16 @@ if jobtype == "r" then
     end
 else
     -- Cron job
+    local job = {name=readJobName(), tasks={}}
     local inv = readInventory()
     if not inv then 
         writeColor("Wrong inventory name\n", colors.red)
         return false
     end
-    local job = {name=inv, task="listenInventory"}
+    local slot = readSlot()
+    local params = {location=inv, slot=slot}
+    table.insert(job.tasks, {exec="listenInventory", params=params})
+    -- TODO add multiple tasks features for cron jobs
     local resp = addCronJob(job)
     if resp.ok then
         writeColor("Successfully added cron job", colors.green)
