@@ -33,16 +33,15 @@ TODO
 
 - [ ] finish liveParams features:
     - [ ] keyboard navigation
-    - [ ] server removeJob option
-    - [ ] handle frequency on cron job
-    - [ ] newly added job need server restart to be active
-    - [ ] factorize job/cron methods on server.lua
-- [x] Fix bug when user input a wrong string in main input and press Enter/Get
-- [ ] Add log when user ask too many crafts
+    - [ ] handle frequency on cron job (refactor parallel API as a class)
+    - [x] server removeJob option
+    - [x] newly added job need server restart to be active -> TEST
+    - [x] factorize job/cron methods on server.lua
 - [ ] Handle count vs count in recipe if recipe provide more than one item
 - [ ] Handle items with nbt
+- [ ] Handle when user ask too many crafts (log + threshold):
+    - Calculate max we can craft ?
+    - cut crafts by chunck ?
 - [ ] add pocket computer support for calling jobs remotely
-- [x] Use return value from callRemote to verify if get/put are ok
-- [x] Clean code (remove unused function and utils.lua ?)
+- [ ] Clean code by segmenting it
 - [ ] Add installation doc (and script ?)
-- [x] Add basalt to source

@@ -48,6 +48,17 @@ function sync()
     return request.ok
 end
 
+-- Reset focus and objects state, update values with server as fresh UI
+function resetState()
+    input:setValue("")
+    countInput:setValue(1)
+    main:setFocusedObject(input)
+    sync()
+    updateItemsList()
+    itemsList:selectItem(1)
+    itemsList:setOffset(0)
+end
+
 -- Update items in list based on a string filter
 function updateItemsList(filter)
     items = {}
@@ -237,13 +248,7 @@ function dump(self, event, button, x, y)
     end
     if self then
         -- Avoid calling this when using this function without handler
-        sync()
-        updateItemsList()
-        input:setValue("")
-        countInput:setValue(1)
-        -- TODO make this works
-        input:setFocus()
-        -- main:setFocusedObject(input)
+        resetState()
     end
     return {ok=true, message="dump", error=""}
 end
@@ -523,15 +528,7 @@ function getSelectedItem(self, event, button, x, y)
         if not get(selectedItem, count) then return false end
     end
     -- Reset position and values
-    -- TODO factorize
-    input:setValue("")
-    countInput:setValue(1)
-    main:setFocusedObject(input)
-    sync()
-    updateItemsList()
-    countInput:setValue(1)
-    itemsList:selectItem(1)
-    itemsList:setOffset(0)
+    resetState()
 end
 
 function navigation(self, event, key)
@@ -573,17 +570,6 @@ function navigation(self, event, key)
     end
 end
 
-function refresh(self, event, button, x, y)
-    input:setValue("")
-    countInput:setValue(1)
-    main:setFocusedObject(input)
-    sync()
-    updateItemsList()
-    countInput:setValue(1)
-    itemsList:selectItem(1)
-    itemsList:setOffset(0)
-end
-
 local function openNewJob()
     local newJobFrame = main:addFrame("newJobFrame")
         :setMovable()
@@ -600,7 +586,10 @@ local function openNewJob()
     local newJobProg = newJobFrame:addProgram("newJobProg")
         :setSize("parent.w", "parent.h - 1")
         :setPosition(1, 2)
-        :onDone(function() newJobFrame:remove() end)
+        :onDone(function()
+                    newJobFrame:remove()
+                    resetState()
+                end)
         :setFocus()
         :execute("addJob.lua")
 

@@ -20,13 +20,6 @@ function addJob(job)
     return response
 end
 
-function addCronJob(job)
-    local message = {endpoint="addCronJob", job=job}
-    rednet.send(SERVER, message, PROTOCOL)
-    local id, response = rednet.receive(PROTOCOL, TIMEOUT)
-    return response
-end
-
 -- A JOB declaration
 -- job = {name="minecraft:dark_oak_planks", tasks={}}
 -- local t = {exec="sendItemToInventory", params={item="minecraft:dark_oak_planks", count=1, location="minecraft:chest_13"}}
@@ -169,7 +162,7 @@ if jobtype ~= "c" then jobtype = "r" end
 if jobtype == "r" then
     -- TODO: if no chest available display message
     -- Regular job
-    local job = {name=readJobName(), tasks={}}
+    local job = {name=readJobName(), tasks={}, type="unit"}
     if not addTask(job["tasks"]) then return false end
     writeColor("Would you like to add another task ? [y/n]\n")
     local more = read(nil, nil, nil, "n")
@@ -186,7 +179,7 @@ if jobtype == "r" then
     end
 else
     -- Cron job
-    local job = {name=readJobName(), tasks={}}
+    local job = {name=readJobName(), tasks={}, type="cron"}
     local inv = readInventory()
     if not inv then 
         writeColor("Wrong inventory name\n", colors.red)
@@ -196,7 +189,7 @@ else
     local params = {location=inv, slot=slot}
     table.insert(job.tasks, {exec="listenInventory", params=params})
     -- TODO add multiple tasks features for cron jobs
-    local resp = addCronJob(job)
+    local resp = addJob(job)
     if resp.ok then
         writeColor("Successfully added cron job", colors.green)
     else

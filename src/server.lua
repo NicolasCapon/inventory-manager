@@ -12,13 +12,12 @@ ALLOWED_INVENTORIES["metalbarrels:gold_tile"] = true
 
 variableLimit = false
 
-inventoryChests = {} -- Chests used for storing items
-recipes = {}
-inventory = {}
-free = {}
-io_inventories = {}
-jobs = {}
-cronjobs = {}
+local inventoryChests = {} -- Chests used for storing items
+local recipes = {}
+local inventory = {}
+local free = {}
+local io_inventories = {}
+local jobs = {cron={}, unit={}}
 
 function log(message)
     local file = fs.open(LOG_FILE, "a")
@@ -162,34 +161,30 @@ function get(name, count, turtle, turtleSlot)
     end
 end
 
--- TODO factorize job and cron
-function loadJobs()
-    local n = 0
-    if not fs.exists(JOBS_FILE) then return {} end
-    for line in io.lines(JOBS_FILE) do
-        local job = textutils.unserialize(line)
-        for _, task in ipairs(job.tasks) do
-            io_inventories[task.params.location] = true
-        end
-        jobs[job.name] = job
-        n = n + 1
+-- TODO move to utils
+function readFile(path)
+    local content
+    if fs.exists(path) then
+        io.open(path, "r")
+        local content = f:read("*all")
+        f:close()
     end
-    print(n .. " jobs loaded from " .. JOBS_FILE)
+    return content
 end
 
--- TODO factorize job and cron
-function loadCronJobs()
+function loadJobs()
+    jobs = textutils.unserialize(readFile(JOBS_FILE)) or {cron={}, unit={}}
+    -- List all chests used by jobs to avoid using them on scanAll
     local n = 0
-    if not fs.exists(CRON_FILE) then return {} end
-    for line in io.lines(CRON_FILE) do
-        local job = textutils.unserialize(line)
-        for _, task in ipairs(job.tasks) do
-            io_inventories[task.params.location] = true
+    for key, value in pairs(jobs) do -- For each type of job
+        for i, job in ipairs(value) do -- For each job of this type
+            n = n + 1
+            for _, task in ipairs(job.tasks) do -- For each task for this job
+                io_inventories[task.params.location] = true
+            end
         end
-        cronjobs[job.name] = job
-        n = n + 1
     end
-    print(n .. " cron loaded from " .. CRON_FILE)
+    print(n .. " jobs loaded from " .. JOBS_FILE)
 end
 
 function loadRecipes()
@@ -541,13 +536,13 @@ function decodeMessage(message, client)
     elseif message.endpoint == "add" then
         response = saveRecipe(message.recipe)
     elseif message.endpoint == "jobs" then
-        response = {ok=true, response=jobs}
+        response = {ok=true, response=jobs.unit}
     elseif message.endpoint == "cronjobs" then
-        response = {ok=true, response=cronjobs}
-    elseif message.endpoint == "addCronJob" then
-        response = addCronJob(message.job)
+        response = {ok=true, response=jobs.cron}
     elseif message.endpoint == "addJob" then
         response = addJob(message.job)
+    elseif message.endpoint == "removeJob" then
+        response = removeJob(message.job)
     elseif message.endpoint == "execJob" then
         response = execJob(message.job, message.params, message.count)
     end
@@ -564,34 +559,31 @@ function handleRequests()
     end
 end
 
-function addCronJob(job)
-    -- TODO verify job
-    -- Exemple: job = {inventory="minecraft:chest_1", task="listenInventory"}
-    local response
-    if not cronjobs[job.name] then
-        cronjobs[job.name] = job
-        local file = fs.open(CRON_FILE, "a")
-        file.write(textutils.serialize(job, { compact = true }) .. "\n")
+-- TODO move to utils
+function overwriteFile(path, content)
+    if fs.exists(path) then
+        local file = fs.open(path, "w")
+        file.write(textutils.serialize(content, { compact = true }))
         file.close()
-        response = {ok=true, response=job}
+        return true
     else
-        response = {ok=false, response=job, error="Job with same name exists"}
+        return false
     end
-    return response
+end
+
+function removeJob(job)
+    jobs[job.type][job.name] = nil
+    return {ok=overwriteFile(JOBS_FILE, jobs), response=job, error="Cannot write to file"
 end
 
 function addJob(job)
-    -- TODO verify job (if for job.tasks, if not task in accepted task then return)
-    -- Example: {name="oak_planks", tasks={{exec=sendItemToInventory, params=...}}
     local response
-    if not jobs[job.name] then
-        jobs[job.name] = job
-        local file = fs.open(JOBS_FILE, "a")
-        file.write(textutils.serialize(job, { compact = true }) .. "\n")
-        file.close()
+    if not jobs[job.type][job.name] then
+        jobs[job.type][job.name] = job
+        overwriteFile(JOBS_FILE, jobs)
         response = {ok=true, response=job}
     else
-        response = {ok=false, response=job, error="Job with this name already exists"}
+        response = {ok=false, response=job, error="Job with same name exists"}
     end
     return response
 end
@@ -603,7 +595,7 @@ function execAllCronJobs()
     -- and continue going when 0 cron are scheduled
     while true do
         local crons = {}
-        for name, job in pairs(cronjobs) do
+        for name, job in pairs(jobs.cron) do
             for _, task in ipairs(job.tasks) do
                 if task.exec == "listenInventory" then
                     local fn = function() listenInventory(task.params) end
@@ -617,7 +609,7 @@ function execAllCronJobs()
     end
 end
 
--- Return a copy of a simple table
+-- Return a copy of a simple table TODO move to utils
 function copy(obj)
     if type(obj) ~= 'table' then return obj end
     local res = {}
@@ -629,8 +621,8 @@ end
 -- liveParams override parameters for the tasks if provided. This param should
 -- be a list of table with same length as job.tasks
 function execJob(name, liveParams, n)
-    if not jobs[name] then return {ok=false, error="No job for name: ".. name} end
-    local job = jobs[name]
+    if not jobs.unit[name] then return {ok=false, error="No job for name: ".. name} end
+    local job = jobs.unit[name]
     -- set defaults
     liveParams = liveParams or {{}} -- List of table
     n = n or 1
@@ -705,7 +697,6 @@ function listenInventory(...)
 end
 
 loadJobs()
-loadCronJobs()
 scanAll()
 loadRecipes()
 progressBar("DU")
