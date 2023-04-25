@@ -314,13 +314,11 @@ end
 function invokeLiveParamsPopup(job, liveParams)
     -- TODO: Isolate in a separate file ?
     -- Collect all basalt object for this popup to be destroyed later on
-    local basaltObjects = {}
     -- Create a UI bloc and return a function to collect item name
     local function createItemBloc(y, frame, text, focus)
         local valueObj = frame:addList():setPosition(1, y + 2)
                                         :setSize("parent.w", 3)
                                         :setBackground(colors.yellow)
-        table.insert(basaltObjects, valueObj)
         local function filter(self, event, key)
             local filter = self:getValue()
             if filter:len() > 2 then
@@ -336,15 +334,13 @@ function invokeLiveParamsPopup(job, liveParams)
                 end
             end
         end
-        table.insert(basaltObjects, frame:addLabel():setText(text)
-                                                    :setPosition(1, y))
+        frame:addLabel():setText(text):setPosition(1, y))
         y = y + 1
         if focus then focus = "focus" end
-        table.insert(basaltObjects, frame:addInput(focus)
-                                         :setPosition(1, y)
-                                         :setSize("parent.w", 1)
-                                         :setBackground(colors.white)
-                                         :onChange(filter))
+        frame:addInput(focus):setPosition(1, y)
+                             :setSize("parent.w", 1)
+                             :setBackground(colors.white)
+                             :onChange(filter))
         y = y + 2 -- also add +1 for valueObj that we set earlier
         for key, value in pairs(inventory) do
             valueObj:addItem(key)
@@ -357,15 +353,13 @@ function invokeLiveParamsPopup(job, liveParams)
 
     -- Create a UI bloc and return a function to collect item count
     local function createCountBloc(y, frame, text, focus)
-        table.insert(basaltObjects, frame:addLabel():setText(text)
-                                                    :setPosition(1, y))
+        frame:addLabel():setText(text):setPosition(1, y))
         y = y + 1
         if focus then focus = "focus" end
         local valueObj = frame:addInput(focus):setInputType("number")
                                               :setPosition(1, y)
                                               :setSize("parent.w", 1)
                                               :setBackground(colors.white)
-        table.insert(basaltObjects, valueObj)
         y = y + 1
         local function getValue()
             return valueObj:getValue()
@@ -375,14 +369,12 @@ function invokeLiveParamsPopup(job, liveParams)
 
     -- Create a UI bloc and return a function to collect destination chest
     local function createLocationBloc(y, frame, text, focus)
-        table.insert(basaltObjects, frame:addLabel():setText(text)
-                                                    :setPosition(1, y))
+        frame:addLabel():setText(text):setPosition(1, y))
         y = y + 1
         if focus then focus = "focus" end
         local valueObj = frame:addDropdown(focus):setPosition(1, y)
                                                  :setSize("parent.w - 1", 1)
                                                  :setBackground(colors.white)
-        table.insert(basaltObjects, valueObj)
         -- Request chests names and add them as items to the dropDown
         local satelliteChests = {}
         local message = {endpoint="satelliteChests"}
@@ -403,7 +395,6 @@ function invokeLiveParamsPopup(job, liveParams)
     -- Create popup frame
     local f = main:addFrame("popup"):setSize("parent.w", "parent.h")
                                     :setScrollable()
-    table.insert(basaltObjects, f)
     -- params is a list of table where each item of the list is a table of
     -- functions for collecting params of each task
     local params = {} 
@@ -416,11 +407,11 @@ function invokeLiveParamsPopup(job, liveParams)
         for param, value in pairs(task) do
             if firstParam then
                 -- we need to construct this title inside the loop if liveParams = {}
-                table.insert(basaltObjects, f:addLabel():setText("Task " .. i)
-                                                        :setPosition(1, y)
-                                                        :setForeground(colors.orange)
-                                                        :setSize("parent.w", 1)
-                                                        :setBackground(colors.blue))
+                f:addLabel():setText("Task " .. i)
+                            :setPosition(1, y)
+                            :setForeground(colors.orange)
+                            :setSize("parent.w", 1)
+                            :setBackground(colors.blue))
                 y = y + 1
             end
             if param == "item" then
@@ -433,15 +424,6 @@ function invokeLiveParamsPopup(job, liveParams)
             if first then first = false end -- next tasks are not the first
         end
         table.insert(params, getValueFns)
-    end
-
-    -- Function to destroy this popup
-    local function selfDestroy()
-        f:remove()
-        -- TODO remove this function and basaltObjects var
-        -- for _, obj in ipairs(basaltObjects) do
-        --     main:removeObject(obj:getName())
-        -- end
     end
 
     -- Button functions
@@ -459,31 +441,37 @@ function invokeLiveParamsPopup(job, liveParams)
         local message = {endpoint="execJob", job=job.name, count=count, params=jobParams}
         local request = sendMessage(message, modem)
         if request.ok then
-            selfDestroy() -- We dont need the popup anymore, destroy it
+            f:remove() -- We dont need the popup anymore, destroy it
         else
             log(request.error)
         end
     end
 
-    local function cancel()
-        selfDestroy()
+    -- Keyboard navigation option for this frame
+    local function keyNav(self, key, event)
+        if key == keys.enter then
+            collectValues()
+        end
     end
+    f:setOnKey(function(self, key, event)
+        if key == keys.enter then
+            collectValues()
+        end
+    end)
 
     -- Finally add buttons
     local buttonOK = f:addButton("okLive")
                       :setText("OK")
-                      :onClick(collectValues)
                       :setPosition("parent.w - 9", "parent.h")
                       :setSize(10, 1)
                       :setBackground(colors.green)
-    table.insert(basaltObjects, buttonOK)
+                      :onClick(collectValues)
     local buttonKO = f:addButton("cancelLive")
                       :setText("Cancel")
                       :setPosition(1, "parent.h")
                       :setSize(10, 1)
                       :setBackground(colors.red)
-                      :onClick(cancel)
-    table.insert(basaltObjects, buttonKO)
+                      :onClick(function() f:remove() end)
     return params
 end
 

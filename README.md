@@ -32,7 +32,7 @@ TODO
 ## TODO
 
 - [ ] finish liveParams features:
-    - [ ] keyboard navigation
+    - [x] keyboard navigation
     - [ ] handle frequency on cron job (refactor parallel API as a class)
     - [x] server removeJob option
     - [x] newly added job need server restart to be active -> TEST
