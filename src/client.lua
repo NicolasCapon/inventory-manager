@@ -130,6 +130,8 @@ function make(name, count)
     local recipe = recipes[name]
     if not recipe then return false end
     local dependencies = {}
+    -- For recipe producing more than one, adjust count to avoid surproducing
+    count = math.ceil(count / recipe.count)
     local request = sendMessage({endpoint="make", recipe=recipe, count=count}, modem) 
     if request.ok then
         dependencies = request.response.dependencies

@@ -37,7 +37,7 @@ TODO
     - [x] server removeJob option
     - [x] newly added job need server restart to be active -> TEST
     - [x] factorize job/cron methods on server.lua
-- [ ] Handle count vs count in recipe if recipe provide more than one item
+- [x] Handle count vs count in recipe if recipe provide more than one item
 - [ ] Handle items with nbt
 - [ ] Handle when user ask too many crafts (log + threshold):
     - Calculate max we can craft ?
