@@ -3,10 +3,15 @@ local basalt = require("basalt")
 local modem = peripheral.find("modem") or error("No modem attached", 0)
 rednet.open("right")
 
-listIsFiltered = false
-inventory = {} -- dict
-recipes = {} -- dict
-items = {}
+local listIsFiltered = false
+local inventory = {} -- dict
+local recipes = {}   -- dict
+local items = {}
+local main = basalt.createFrame():addLayout("client.xml")
+local input = main:getObject("input")
+local countInput = main:getObject("countInput")
+local itemsList = main:getObject("itemsList")
+
 
 function sendMessage(message, modem)
     local SERVER = 6 --TODO put real computer ID here
@@ -17,7 +22,7 @@ function sendMessage(message, modem)
     rednet.send(SERVER, message, PROTOCOL)
     local id, response = rednet.receive(PROTOCOL, TIMEOUT)
     if not id then
-        response = {ok=false, response={}, error="Server not responding"}
+        response = { ok = false, response = {}, error = "Server unreachable" }
         log(response.error, true)
     elseif not response.ok then
         log(response.error, true)
@@ -39,7 +44,7 @@ function log(message, keep)
 end
 
 function sync()
-    local request = sendMessage({endpoint="all"}, modem)
+    local request = sendMessage({ endpoint = "all" }, modem)
     if request.ok then
         inventory = request.response.inventory
         recipes = request.response.recipes
@@ -132,11 +137,12 @@ function make(name, count)
     local dependencies = {}
     -- For recipe producing more than one, adjust count to avoid surproducing
     count = math.ceil(count / recipe.count)
-    local request = sendMessage({endpoint="make", recipe=recipe, count=count}, modem) 
+    local msg = { endpoint = "make", recipe = recipe, count = count }
+    local request = sendMessage(msg, modem)
     if request.ok then
         dependencies = request.response.dependencies
     else
-        log("Click to see what's missing\n" .. textutils.serialize(request.error))
+        log("Missing items: (click)\n" .. textutils.serialize(request.error))
         return false
     end
     local deplvl = dependencies["maxlvl"]
@@ -145,16 +151,16 @@ function make(name, count)
             -- Avoid maxlvl entry
             if dependency ~= "maxlvl" then
                 if value.lvl == deplvl then
-                    if not craft(recipes[dependency], value.count).ok then 
-                        return false 
+                    if not craft(recipes[dependency], value.count).ok then
+                        return false
                     end
                 end
             end
         end
         deplvl = deplvl - 1
     end
-    if not craft(recipe, count).ok then 
-        return false 
+    if not craft(recipe, count).ok then
+        return false
     end
     return true
 end
@@ -176,7 +182,10 @@ function craft(recipe, count)
     for _, item in ipairs(recipe.items) do
         turtle.select(item.slot)
         local total = item.count * count
-        local message = {endpoint="get", item=item.name, count=total, slot=turtle.getSelectedSlot()}
+        local message = { endpoint = "get",
+                          item = item.name,
+                          count = total,
+                          slot = turtle.getSelectedSlot() }
         request = sendMessage(message, modem)
         if not request.ok then
             error = request.error
@@ -192,28 +201,30 @@ function craft(recipe, count)
         error = "error while crafting " .. recipe.name
         log(error)
         status = false
-        return {ok=status, message=recipe, error=error}
+        return { ok = status, message = recipe, error = error }
     end
-    return {ok=status, message=recipe, error=error}
+    return { ok = status, message = recipe, error = error }
 end
 
 function learnRecipe(self, event, button, x, y)
     -- Check for slots that should be empty
-    local empty = {4, 8, 12, 13, 14, 15, 16}
-    for _,i in ipairs(empty) do
+    local empty = { 4, 8, 12, 13, 14, 15, 16 }
+    for _, i in ipairs(empty) do
         if turtle.getItemDetail(i) ~= nil then
             log("Only put items in the top left 3x3 grid")
             return false
         end
     end
-    local recipe = {items={}, type="crafting_table"}
-    local slots = {1, 2, 3, 5, 6, 7, 9, 10, 11}
+    local recipe = { items = {}, type = "crafting_table" }
+    local slots = { 1, 2, 3, 5, 6, 7, 9, 10, 11 }
     local counter = 0
-    for _,i in ipairs(slots) do
+    for _, i in ipairs(slots) do
         local item = turtle.getItemDetail(i)
         if item ~= nil then
             counter = counter + 1
-            table.insert(recipe["items"], {slot=i, name=item.name, count=item.count})
+            table.insert(recipe["items"], { slot = i,
+                                            name = item.name,
+                                            count = item.count })
         end
     end
     if counter == 0 then
@@ -225,7 +236,8 @@ function learnRecipe(self, event, button, x, y)
     if turtle.craft() then
         recipe["name"]  = turtle.getItemDetail(16).name
         recipe["count"] = turtle.getItemDetail(16).count
-        local request = sendMessage({endpoint="add", recipe=recipe}, modem)
+        local msg = { endpoint = "add", recipe = recipe }
+        local request   = sendMessage(msg, modem)
         if request.ok then
             log("New recipe [" .. recipe["name"] .. "] learned.")
             sync()
@@ -236,15 +248,15 @@ function learnRecipe(self, event, button, x, y)
 end
 
 function dump(self, event, button, x, y)
-    for i=1,16 do
+    for i = 1, 16 do
         local item = turtle.getItemDetail(i)
         if item ~= nil then
-            local message = {endpoint="put", item=item, slot=i}
+            local message = { endpoint = "put", item = item, slot = i }
             local request = sendMessage(message, modem)
             if not request.ok then
                 log(request.error)
                 local error = "Dump failed: " .. request.error
-                return {ok=false, message=request.message, error=error}
+                return { ok = false, message = request.message, error = error }
             end
         end
     end
@@ -252,11 +264,11 @@ function dump(self, event, button, x, y)
         -- Avoid calling this when using this function without handler
         resetState()
     end
-    return {ok=true, message="dump", error=""}
+    return { ok = true, message = "dump", error = "" }
 end
 
 function checkForEmptySlots()
-    for i=1,16 do
+    for i = 1, 16 do
         if turtle.getItemDetail(i) ~= nil then
             log("Remove items in turtle inventory first (use command dump)")
             return false
@@ -279,8 +291,7 @@ function get(name, count)
             -- Cap the max to 64
             recipeCount = 64
         end
-        recipe = recipes[name]
-        if recipe then
+        if recipes[name] then
             if not make(name, recipeCount) then
                 -- If we cannot craft then only give what's in inventory
                 count = maxCount
@@ -298,8 +309,8 @@ function get(name, count)
     if count < 65 then
         slot = turtle.getSelectedSlot()
     end
-    local message = {item=name, endpoint="get", count=count, slot=slot}
-    return sendMessage(message, modem).ok
+    local msg = { item = name, endpoint = "get", count = count, slot = slot }
+    return sendMessage(msg, modem).ok
 end
 
 function isRecipe(name)
@@ -311,25 +322,25 @@ function isJob(name)
 end
 
 -- Show a frame dynamically created to get missing liveParams for a job
-function invokeLiveParamsPopup(job, liveParams)
+function invokeLiveParamsPopup(job, liveParams, count)
     -- TODO: Isolate in a separate file ?
     -- Collect all basalt object for this popup to be destroyed later on
     -- Create a UI bloc and return a function to collect item name
     local function createItemBloc(y, frame, text, focus)
         local valueObj = frame:addList():setPosition(1, y + 2)
-                                        :setSize("parent.w", 3)
-                                        :setBackground(colors.yellow)
+            :setSize("parent.w", 3)
+            :setBackground(colors.yellow)
         local function filter(self, event, key)
-            local filter = self:getValue()
-            if filter:len() > 2 then
+            local filterStr = self:getValue()
+            if filterStr:len() > 2 then
                 valueObj:clear()
-                for key, value in pairs(inventory) do
-                    if string.find(key, filter) then
+                for key, _ in pairs(inventory) do
+                    if string.find(key, filterStr) then
                         valueObj:addItem(key)
                     end
                 end
             else
-                for key, value in pairs(inventory) do
+                for key, _ in pairs(inventory) do
                     valueObj:addItem(key)
                 end
             end
@@ -338,9 +349,9 @@ function invokeLiveParamsPopup(job, liveParams)
         y = y + 1
         if focus then focus = "focus" end
         frame:addInput(focus):setPosition(1, y)
-                             :setSize("parent.w", 1)
-                             :setBackground(colors.white)
-                             :onChange(filter)
+            :setSize("parent.w", 1)
+            :setBackground(colors.white)
+            :onChange(filter)
         y = y + 2 -- also add +1 for valueObj that we set earlier
         for key, value in pairs(inventory) do
             valueObj:addItem(key)
@@ -357,9 +368,9 @@ function invokeLiveParamsPopup(job, liveParams)
         y = y + 1
         if focus then focus = "focus" end
         local valueObj = frame:addInput(focus):setInputType("number")
-                                              :setPosition(1, y)
-                                              :setSize("parent.w", 1)
-                                              :setBackground(colors.white)
+            :setPosition(1, y)
+            :setSize("parent.w", 1)
+            :setBackground(colors.white)
         y = y + 1
         local function getValue()
             return valueObj:getValue()
@@ -368,16 +379,16 @@ function invokeLiveParamsPopup(job, liveParams)
     end
 
     -- Create a UI bloc and return a function to collect destination chest
-    local function createLocationBloc(y, frame, text, focus)
+    local function createLocBloc(y, frame, text, focus)
         frame:addLabel():setText(text):setPosition(1, y)
         y = y + 1
         if focus then focus = "focus" end
         local valueObj = frame:addDropdown(focus):setPosition(1, y)
-                                                 :setSize("parent.w - 1", 1)
-                                                 :setBackground(colors.white)
+            :setSize("parent.w - 1", 1)
+            :setBackground(colors.white)
         -- Request chests names and add them as items to the dropDown
         local satelliteChests = {}
-        local message = {endpoint="satelliteChests"}
+        local message = { endpoint = "satelliteChests" }
         local request = sendMessage(message, modem)
         if request.ok then
             satelliteChests = request.response
@@ -394,10 +405,10 @@ function invokeLiveParamsPopup(job, liveParams)
 
     -- Create popup frame
     local f = main:addFrame("popup"):setSize("parent.w", "parent.h")
-                                    :setScrollable()
+        :setScrollable()
     -- params is a list of table where each item of the list is a table of
     -- functions for collecting params of each task
-    local params = {} 
+    local params = {}
     local y = 1 -- store y value for dynamically construct UI
     local first = true
     for i, task in ipairs(liveParams) do
@@ -406,20 +417,21 @@ function invokeLiveParamsPopup(job, liveParams)
         local firstParam = true
         for param, value in pairs(task) do
             if firstParam then
-                -- we need to construct this title inside the loop if liveParams = {}
+                -- we need to construct this title inside the loop
+                -- in case liveParams = {}
                 f:addLabel():setText("Task " .. i)
-                            :setPosition(1, y)
-                            :setForeground(colors.orange)
-                            :setSize("parent.w", 1)
-                            :setBackground(colors.blue)
+                    :setPosition(1, y)
+                    :setForeground(colors.orange)
+                    :setSize("parent.w", 1)
+                    :setBackground(colors.blue)
                 y = y + 1
             end
             if param == "item" then
                 getValueFns[param] = createItemBloc(y, f, "Item name", first)
             elseif param == "count" then
-                getValueFns[param] = createItemBloc(y, f, "Item count", first)
+                getValueFns[param] = createCountBloc(y, f, "Item count", first)
             elseif param == "location" then
-                getValueFns[param] = createLocationBloc(y, f, "Destination chest", first)
+                getValueFns[param] = createLocBloc(y, f, "Export chest", first)
             end
             if first then first = false end -- next tasks are not the first
         end
@@ -427,7 +439,7 @@ function invokeLiveParamsPopup(job, liveParams)
     end
 
     -- Button functions
-    local function collectValues() 
+    local function collectValues()
         local jobParams = {}
         -- Collect values of each UI Objects of interest
         for _, task in ipairs(params) do
@@ -438,7 +450,10 @@ function invokeLiveParamsPopup(job, liveParams)
             table.insert(jobParams, taskParams)
         end
         -- Submit the job with collected live params
-        local message = {endpoint="execJob", job=job.name, count=count, params=jobParams}
+        local message = { endpoint = "execJob",
+                          job = job.name,
+                          count = count,
+                          params = jobParams }
         local request = sendMessage(message, modem)
         if request.ok then
             f:remove() -- We dont need the popup anymore, destroy it
@@ -448,11 +463,6 @@ function invokeLiveParamsPopup(job, liveParams)
     end
 
     -- Keyboard navigation option for this frame
-    local function keyNav(self, key, event)
-        if key == keys.enter then
-            collectValues()
-        end
-    end
     f:setOnKey(function(self, key, event)
         if key == keys.enter then
             collectValues()
@@ -460,24 +470,22 @@ function invokeLiveParamsPopup(job, liveParams)
     end)
 
     -- Finally add buttons
-    local buttonOK = f:addButton("okLive")
-                      :setText("OK")
-                      :setPosition("parent.w - 9", "parent.h")
-                      :setSize(10, 1)
-                      :setBackground(colors.green)
-                      :onClick(collectValues)
-    local buttonKO = f:addButton("cancelLive")
-                      :setText("Cancel")
-                      :setPosition(1, "parent.h")
-                      :setSize(10, 1)
-                      :setBackground(colors.red)
-                      :onClick(function() f:remove() end)
+    f:addButton("okLive"):setText("OK")
+        :setPosition("parent.w - 9", "parent.h")
+        :setSize(10, 1)
+        :setBackground(colors.green)
+        :onClick(collectValues)
+    f:addButton("cancelLive"):setText("Cancel")
+        :setPosition(1, "parent.h")
+        :setSize(10, 1)
+        :setBackground(colors.red)
+        :onClick(function() f:remove() end)
     return params
 end
 
 -- Verify if this job contains live parameters == "*"
 -- If it contains, then pop up the right frame to handle theses params
-function getLiveParams(job)
+function getLiveParams(job, count)
     local atLeastOne = false
     local liveParams = {}
     for _, task in ipairs(job.tasks) do
@@ -491,7 +499,7 @@ function getLiveParams(job)
         table.insert(liveParams, params)
     end
     if atLeastOne then
-        invokeLiveParamsPopup(job, liveParams)
+        invokeLiveParamsPopup(job, liveParams, count)
     end
     return atLeastOne
 end
@@ -507,11 +515,13 @@ function getSelectedItem(self, event, button, x, y)
     if isRecipe(selectedItemText) then
         make(selectedItem, count)
     elseif isJob(selectedItemText) then
-        if getLiveParams(jobs[selectedItem]) then
+        if getLiveParams(jobs[selectedItem], count) then
             main:getObject("popup"):setFocus():getObject("focus"):setFocus()
             return true -- Dont update and dont set focus to main frame
         else
-            local message = {endpoint="execJob", job=selectedItem, count=count}
+            local message = { endpoint = "execJob",
+                              job = selectedItem,
+                              count = count }
             if not sendMessage(message, modem).ok then return false end
         end
     else
@@ -577,9 +587,9 @@ local function openNewJob()
         :setSize("parent.w", "parent.h - 1")
         :setPosition(1, 2)
         :onDone(function()
-                    newJobFrame:remove()
-                    resetState()
-                end)
+            newJobFrame:remove()
+            resetState()
+        end)
         :setFocus()
         :execute("addJob.lua")
 
@@ -595,12 +605,10 @@ local function openNewJob()
     return newJobFrame
 end
 
--- TODO try to apply local to these variables
-main = basalt.createFrame():addLayout("client.xml")
-input = main:getObject("input"):onKey(navigation):onChange(filterList)
-countInput = main:getObject("countInput"):setValue(1):onKey(navigation)
-itemsList = main:getObject("itemsList"):onKey(navigation)
-
+-- Apply events
+main:getObject("input"):onKey(navigation):onChange(filterList)
+main:getObject("countInput"):setValue(1):onKey(navigation)
+main:getObject("itemsList"):onKey(navigation)
 main:getObject("getButton"):onClick(getSelectedItem)
 main:getObject("dumpButton"):onClick(dump)
 main:getObject("learnButton"):onClick(learnRecipe)
@@ -609,5 +617,4 @@ main:setFocusedObject(input)
 
 sync()
 updateItemsList()
-
 basalt.autoUpdate()

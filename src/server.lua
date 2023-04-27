@@ -617,30 +617,6 @@ function addJob(job)
     return response
 end
 
--- function execAllCronJobs()
-    -- -- TODO: fork https://github.com/cc-tweaked/CC-Tweaked/blob/5d7cbc8c64ea8f882d6ccb2688a2418a4e77d90e/projects/core/src/main/resources/data/computercraft/lua/rom/apis/parallel.lua#L148
-    -- -- To handle cron with differnt freq:
-    -- -- create a version of parallel that can handle adding/removing jobs while running
-    -- -- and continue going when 0 cron are scheduled
-    -- while true do
-        -- local crons = {}
-        -- for name, job in pairs(jobs.cron) do
-            -- for _, task in ipairs(job.tasks) do
-                -- if task.exec == "listenInventory" then
-                    -- local fn = function() 
-                                    -- listenInventory(task.params)
-                                    -- os.sleep(task.freq)
-                                -- end
-                    -- table.insert(crons, fn)
-                -- end
-            -- end
-        -- end
-        -- -- print("Exec " .. #crons .. " job(s)")
-        -- parallel.waitForAll(table.unpack(crons))
-        -- os.sleep(5)
-    -- end
--- end
-
 -- Return a copy of a simple table TODO move to utils
 function copy(obj)
     if type(obj) ~= 'table' then return obj end
@@ -726,6 +702,36 @@ function listenInventory(...)
         ok, item = pcall(modem.callRemote, inv, "getItemDetail", n)
     end
     return {ok=true, response=inv}
+end
+
+function keepMinItemInSlot(...)
+    local args = ...
+    local inv = args.location
+    local slot = args.slot
+    local max = args.max
+    local min = args.min
+    local itName = args.item
+    local ok, item = pcall(modem.callRemote, inv, "getItemDetail", slot)
+    if ok then
+        if not item then
+            local req = put(itName, min, max, inv, slot)
+            if not req.ok then
+                print(req.error)
+                return req
+            else
+                return { ok = true, response = args}
+            end
+        elseif item.count < min then
+            local diff = min - item.count
+            local req = put(itName, diff, max, inv, slot)
+            if not req.ok then
+                print("keepMinItemInSlot " .. req.error)
+                return req
+            else
+                return { ok = true, response = args}
+            end
+        end
+    end
 end
 
 loadJobs()
