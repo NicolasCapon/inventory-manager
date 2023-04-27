@@ -125,6 +125,12 @@ function readCount()
     return tonumber(count) or "*"
 end
 
+function readFrequency()
+    writeColor("Choose job frequency (default=10)\n")
+    local count = read(nil, nil, nil, "10")
+    return tonumber(count) or 10
+end
+
 function readSlot(default)
     defaultstr = default or "nil"
     writeColor("Choose slot on chest (default=".. defaultstr ..")\n")
@@ -186,8 +192,9 @@ else
         return false
     end
     local slot = readSlot()
+    local freq = readFrequency()
     local params = {location=inv, slot=slot}
-    table.insert(job.tasks, {exec="listenInventory", params=params})
+    table.insert(job.tasks, {exec="listenInventory", params=params, freq=freq})
     -- TODO add multiple tasks features for cron jobs
     local resp = addJob(job)
     if resp.ok then

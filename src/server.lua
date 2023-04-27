@@ -1,16 +1,15 @@
+local Scheduler = require("scheduler")
 local modem = peripheral.find("modem") or error("No modem attached", 0)
 local monitor = peripheral.find("monitor") or error("No monitor attached", 0)
 peripheral.find("modem", rednet.open)
 
 RECIPES_FILE = "recipes.txt"
 JOBS_FILE = "jobs.txt"
-CRON_FILE = "cron.txt"
 LOG_FILE = "server.log"
 ALLOWED_INVENTORIES = {}
 ALLOWED_INVENTORIES["minecraft:chest"] = true
 ALLOWED_INVENTORIES["metalbarrels:gold_tile"] = true
-
-variableLimit = false
+VARIABLElIMIT = false
 
 local inventoryChests = {} -- Chests used for storing items
 local recipes = {}
@@ -18,6 +17,7 @@ local inventory = {}
 local free = {}
 local io_inventories = {}
 local jobs = {cron={}, unit={}}
+local scheduler = Scheduler:new()
 
 function log(message)
     local file = fs.open(LOG_FILE, "a")
@@ -71,7 +71,7 @@ function scanAll()
     for i, remote in pairs(remotes) do
         if (ALLOWED_INVENTORIES[modem.getTypeRemote(remote)] and io_inventories[remote] == nil) then
             inventoryChests[remote] = true
-            table.insert(scans, function() scanRemoteInventory(remote) end)
+            table.insert(scans, function() scanRemoteInventory(remote, VARIABLElIMIT) end)
         end
     end
     parallel.waitForAll(table.unpack(scans))
@@ -172,6 +172,18 @@ function readFile(path)
     return content
 end
 
+function addToScheduler(job)
+    for _, task in ipairs(job.tasks) do
+        if task.exec == "listenInventory" then
+            local fn = function()
+                listenInventory(task.params)
+                os.sleep(task.freq)
+            end
+            scheduler:addTask(fn, job.name)
+        end
+    end
+end
+
 function loadJobs()
     local content = readFile(JOBS_FILE)
     if content then
@@ -179,10 +191,14 @@ function loadJobs()
     else
         jobs = {cron={}, unit={}}
     end
-    -- List all chests used by jobs to avoid using them on scanAll
+    -- Add to scheduler all cron and List chests used by jobs to avoid using 
+    -- them on scanAll
     local n = 0
     for key, value in pairs(jobs) do -- For each type of job
-        for i, job in ipairs(value) do -- For each job of this type
+        for _, job in ipairs(value) do -- For each job of this type
+            if key == "cron" then
+                addToScheduler(job)
+            end
             n = n + 1
             for _, task in ipairs(job.tasks) do -- For each task for this job
                 io_inventories[task.params.location] = true
@@ -577,6 +593,9 @@ function overwriteFile(path, content)
 end
 
 function removeJob(job)
+    if job.type == "cron" then
+        scheduler:removeTasksByName(job.name)
+    end
     jobs[job.type][job.name] = nil
     return {ok=overwriteFile(JOBS_FILE, jobs),
             response=job,
@@ -587,7 +606,10 @@ function addJob(job)
     local response
     if not jobs[job.type][job.name] then
         jobs[job.type][job.name] = job
-        overwriteFile(JOBS_FILE, jobs)
+        overwriteFile(JOBS_FILE, jobs) -- Write down that job
+        if job.type == "cron" then
+            addToScheduler(job)
+        end
         response = {ok=true, response=job}
     else
         response = {ok=false, response=job, error="Job with same name exists"}
@@ -595,26 +617,29 @@ function addJob(job)
     return response
 end
 
-function execAllCronJobs()
-    -- TODO: fork https://github.com/cc-tweaked/CC-Tweaked/blob/5d7cbc8c64ea8f882d6ccb2688a2418a4e77d90e/projects/core/src/main/resources/data/computercraft/lua/rom/apis/parallel.lua#L148
-    -- To handle cron with differnt freq:
-    -- create a version of parallel that can handle adding/removing jobs while running
-    -- and continue going when 0 cron are scheduled
-    while true do
-        local crons = {}
-        for name, job in pairs(jobs.cron) do
-            for _, task in ipairs(job.tasks) do
-                if task.exec == "listenInventory" then
-                    local fn = function() listenInventory(task.params) end
-                    table.insert(crons, fn)
-                end
-            end
-        end
-        -- print("Exec " .. #crons .. " job(s)")
-        parallel.waitForAll(table.unpack(crons))
-        os.sleep(5)
-    end
-end
+-- function execAllCronJobs()
+    -- -- TODO: fork https://github.com/cc-tweaked/CC-Tweaked/blob/5d7cbc8c64ea8f882d6ccb2688a2418a4e77d90e/projects/core/src/main/resources/data/computercraft/lua/rom/apis/parallel.lua#L148
+    -- -- To handle cron with differnt freq:
+    -- -- create a version of parallel that can handle adding/removing jobs while running
+    -- -- and continue going when 0 cron are scheduled
+    -- while true do
+        -- local crons = {}
+        -- for name, job in pairs(jobs.cron) do
+            -- for _, task in ipairs(job.tasks) do
+                -- if task.exec == "listenInventory" then
+                    -- local fn = function() 
+                                    -- listenInventory(task.params)
+                                    -- os.sleep(task.freq)
+                                -- end
+                    -- table.insert(crons, fn)
+                -- end
+            -- end
+        -- end
+        -- -- print("Exec " .. #crons .. " job(s)")
+        -- parallel.waitForAll(table.unpack(crons))
+        -- os.sleep(5)
+    -- end
+-- end
 
 -- Return a copy of a simple table TODO move to utils
 function copy(obj)
@@ -708,4 +733,4 @@ scanAll()
 loadRecipes()
 progressBar("DU")
 print("Waiting for clients requests...")
-parallel.waitForAll(handleRequests, execAllCronJobs)
+parallel.waitForAll(handleRequests, scheduler:run())
