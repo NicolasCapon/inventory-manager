@@ -165,7 +165,7 @@ end
 function readFile(path)
     local content
     if fs.exists(path) then
-        io.open(path, "r")
+        local f = io.open(path, "r")
         local content = f:read("*all")
         f:close()
     end
@@ -173,7 +173,12 @@ function readFile(path)
 end
 
 function loadJobs()
-    jobs = textutils.unserialize(readFile(JOBS_FILE)) or {cron={}, unit={}}
+    local content = readFile(JOBS_FILE)
+    if content then
+        jobs = textutils.unserialize(content)
+    else
+        jobs = {cron={}, unit={}}
+    end
     -- List all chests used by jobs to avoid using them on scanAll
     local n = 0
     for key, value in pairs(jobs) do -- For each type of job
@@ -573,7 +578,9 @@ end
 
 function removeJob(job)
     jobs[job.type][job.name] = nil
-    return {ok=overwriteFile(JOBS_FILE, jobs), response=job, error="Cannot write to file"
+    return {ok=overwriteFile(JOBS_FILE, jobs),
+            response=job,
+            error="Cannot write to file"}
 end
 
 function addJob(job)

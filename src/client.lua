@@ -334,13 +334,13 @@ function invokeLiveParamsPopup(job, liveParams)
                 end
             end
         end
-        frame:addLabel():setText(text):setPosition(1, y))
+        frame:addLabel():setText(text):setPosition(1, y)
         y = y + 1
         if focus then focus = "focus" end
         frame:addInput(focus):setPosition(1, y)
                              :setSize("parent.w", 1)
                              :setBackground(colors.white)
-                             :onChange(filter))
+                             :onChange(filter)
         y = y + 2 -- also add +1 for valueObj that we set earlier
         for key, value in pairs(inventory) do
             valueObj:addItem(key)
@@ -353,7 +353,7 @@ function invokeLiveParamsPopup(job, liveParams)
 
     -- Create a UI bloc and return a function to collect item count
     local function createCountBloc(y, frame, text, focus)
-        frame:addLabel():setText(text):setPosition(1, y))
+        frame:addLabel():setText(text):setPosition(1, y)
         y = y + 1
         if focus then focus = "focus" end
         local valueObj = frame:addInput(focus):setInputType("number")
@@ -369,7 +369,7 @@ function invokeLiveParamsPopup(job, liveParams)
 
     -- Create a UI bloc and return a function to collect destination chest
     local function createLocationBloc(y, frame, text, focus)
-        frame:addLabel():setText(text):setPosition(1, y))
+        frame:addLabel():setText(text):setPosition(1, y)
         y = y + 1
         if focus then focus = "focus" end
         local valueObj = frame:addDropdown(focus):setPosition(1, y)
@@ -411,7 +411,7 @@ function invokeLiveParamsPopup(job, liveParams)
                             :setPosition(1, y)
                             :setForeground(colors.orange)
                             :setSize("parent.w", 1)
-                            :setBackground(colors.blue))
+                            :setBackground(colors.blue)
                 y = y + 1
             end
             if param == "item" then
