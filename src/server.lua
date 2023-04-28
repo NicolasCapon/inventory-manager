@@ -543,7 +543,7 @@ function decodeMessage(message, client)
         response = {ok=true, response=inventory}
     elseif message.endpoint == "all" then
         progressBar("DU")
-        response = {ok=true, response={inventory=inventory, recipes=recipes, jobs=jobs}}
+        response = {ok=true, response={inventory=inventory, recipes=recipes, jobs=jobs.unit}}
     elseif message.endpoint == "inventoryChests" then
         response = {ok=true, response=inventoryChests}
     elseif message.endpoint == "satelliteChests" then
@@ -739,4 +739,4 @@ scanAll()
 loadRecipes()
 progressBar("DU")
 print("Waiting for clients requests...")
-parallel.waitForAll(handleRequests, scheduler:run())
+parallel.waitForAll(handleRequests, function() scheduler:run() end)

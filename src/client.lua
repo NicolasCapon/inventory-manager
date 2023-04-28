@@ -7,6 +7,7 @@ local listIsFiltered = false
 local inventory = {} -- dict
 local recipes = {}   -- dict
 local items = {}
+local jobs = {}
 local main = basalt.createFrame():addLayout("client.xml")
 local input = main:getObject("input")
 local countInput = main:getObject("countInput")
@@ -16,7 +17,7 @@ local itemsList = main:getObject("itemsList")
 function sendMessage(message, modem)
     local SERVER = 6 --TODO put real computer ID here
     local PROTOCOL = "INVENTORY"
-    local TIMEOUT = 5
+    local TIMEOUT = 2
 
     message["from"] = modem.getNameLocal()
     rednet.send(SERVER, message, PROTOCOL)
