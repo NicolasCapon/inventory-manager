@@ -9,8 +9,9 @@ LOG_FILE = "server.log"
 ALLOWED_INVENTORIES = {}
 ALLOWED_INVENTORIES["minecraft:chest"] = true
 ALLOWED_INVENTORIES["metalbarrels:gold_tile"] = true
-VARIABLElIMIT = false
+VARIABLELIMIT = false
 
+local acceptedTasks = {"listenInventory", "keepMinItemInSlot"}
 local inventoryChests = {} -- Chests used for storing items
 local recipes = {}
 local inventory = {}
@@ -71,7 +72,7 @@ function scanAll()
     for i, remote in pairs(remotes) do
         if (ALLOWED_INVENTORIES[modem.getTypeRemote(remote)] and io_inventories[remote] == nil) then
             inventoryChests[remote] = true
-            table.insert(scans, function() scanRemoteInventory(remote, VARIABLElIMIT) end)
+            table.insert(scans, function() scanRemoteInventory(remote, VARIABLELIMIT) end)
         end
     end
     parallel.waitForAll(table.unpack(scans))
@@ -105,7 +106,6 @@ function get(name, count, turtle, turtleSlot)
                     end
                     return {ok=false, response={name=name, count=count}, error=ret}
                 end
-                print(type(ret))
                 local num = tonumber(ret)
                 -- update inventory
                 inventory[name][i]["slot"]["count"] = inventory_count - num
@@ -121,7 +121,6 @@ function get(name, count, turtle, turtleSlot)
                     end
                     return {ok=false, response={name=name, count=count}, error=ret}
                 end
-                print(type(ret))
                 local num = tonumber(ret)
                 -- add free slot and remove inventory slot
                 count = count - num
@@ -142,7 +141,6 @@ function get(name, count, turtle, turtleSlot)
                     end
                     return {ok=false, response={name=name, count=count}, error=ret}
                 end
-                print(type(ret))
                 local num = tonumber(ret)
                 -- add free slot, remove inventory slot and update count
                 table.insert(free, {chest=chest, slot={index=location.slot.index, limit=location.slot.limit}})
@@ -166,18 +164,30 @@ function readFile(path)
     local content
     if fs.exists(path) then
         local f = io.open(path, "r")
-        local content = f:read("*all")
+        content = f:read("*all")
         f:close()
     end
     return content
 end
 
+function itemInList(it, list)
+    for _, o in ipairs(list) do
+        if it == o then
+            return true
+        end
+    end
+end
+
 function addToScheduler(job)
+    -- TODO make this global ?
+    local tasks = {listenInventory=listenInventory, keepMinItemInSlot=keepMinItemInSlot}
     for _, task in ipairs(job.tasks) do
-        if task.exec == "listenInventory" then
+        if itemInList(task.exec, acceptedTasks) then
             local fn = function()
-                listenInventory(task.params)
-                os.sleep(task.freq)
+                while true do
+                    tasks[task.exec](task.params)
+                    os.sleep(task.freq)
+                end
             end
             scheduler:addTask(fn, job.name)
         end
@@ -194,9 +204,10 @@ function loadJobs()
     -- Add to scheduler all cron and List chests used by jobs to avoid using 
     -- them on scanAll
     local n = 0
-    for key, value in pairs(jobs) do -- For each type of job
-        for _, job in ipairs(value) do -- For each job of this type
-            if key == "cron" then
+    for jobType, jobList in pairs(jobs) do -- For each type of job
+        -- print(textutils.serialize(value))
+        for name, job  in pairs(jobList) do -- For each job of this type
+            if jobType == "cron" then
                 addToScheduler(job)
             end
             n = n + 1
@@ -238,7 +249,6 @@ function put_in_free_slot(name, count, maxCount, turtle, turtleSlot)
                 free = clearInventory(free) or {}
                 return {ok=false, response={name=name, count=count, maxCount=maxCount, turtle=turtle, turtleSlot=turtleSlot}, error=ret}
             end
-            print(type(ret))
             local num = tonumber(ret)
             -- add item in inventory
             table.insert(inventory[name], {chest=chest, slot={index=fslot.slot.index, limit=limit, count=num}})
@@ -254,7 +264,6 @@ function put_in_free_slot(name, count, maxCount, turtle, turtleSlot)
                 free = clearInventory(free) or {}
                 return {ok=false, response={name=name, count=count, maxCount=maxCount, turtle=turtle, turtleSlot=turtleSlot}, error=ret}
             end
-            print(type(ret))
             local num = tonumber(ret)
             -- update inventory
             table.insert(inventory[name], {chest=chest, slot={index=fslot.slot.index, limit=limit, count=num}})
@@ -291,7 +300,6 @@ function put(name, count, maxCount, turtle, turtleSlot)
                         -- if error occurs, stop immediately
                         return {ok=false, response={name=name, count=count, maxCount=maxCount, turtle=turtle, turtleSlot=turtleSlot}, error=ret}
                     end
-                    print(type(ret))
                     local num = tonumber(ret)
                     inventory[name][i]["slot"]["count"] = islot.slot.count + num
                     return {ok=true, response={name=name, count=count}, error=""}
@@ -302,7 +310,6 @@ function put(name, count, maxCount, turtle, turtleSlot)
                         -- if error occurs, stop immediately
                         return {ok=false, response={name=name, count=count, maxCount=maxCount, turtle=turtle, turtleSlot=turtleSlot}, error=ret}
                     end
-                    print(type(ret))
                     local num = tonumber(ret)
                     inventory[name][i]["slot"]["count"] = islot.slot.count + num
                     count = count - num
@@ -543,7 +550,7 @@ function decodeMessage(message, client)
         response = {ok=true, response=inventory}
     elseif message.endpoint == "all" then
         progressBar("DU")
-        response = {ok=true, response={inventory=inventory, recipes=recipes, jobs=jobs.unit}}
+        response = {ok=true, response={inventory=inventory, recipes=recipes, jobs=jobs.unit, acceptedTasks=acceptedTasks, cron=jobs.cron}}
     elseif message.endpoint == "inventoryChests" then
         response = {ok=true, response=inventoryChests}
     elseif message.endpoint == "satelliteChests" then
@@ -582,14 +589,10 @@ end
 
 -- TODO move to utils
 function overwriteFile(path, content)
-    if fs.exists(path) then
-        local file = fs.open(path, "w")
-        file.write(textutils.serialize(content, { compact = true }))
-        file.close()
-        return true
-    else
-        return false
-    end
+    local file = fs.open(path, "w")
+    file.write(textutils.serialize(content, { compact = true }))
+    file.close()
+    return true
 end
 
 function removeJob(job)
@@ -707,23 +710,22 @@ end
 function keepMinItemInSlot(...)
     local args = ...
     local inv = args.location
-    local slot = args.slot
-    local max = args.max
-    local min = args.min
+    local slot = args.slot or 1
+    local min = args.min or 1
     local itName = args.item
     local ok, item = pcall(modem.callRemote, inv, "getItemDetail", slot)
+    print("minItem", ok, min, slot, inv,itName)
     if ok then
         if not item then
-            local req = put(itName, min, max, inv, slot)
+            local req = get(itName, min, inv, slot)
             if not req.ok then
-                print(req.error)
                 return req
             else
                 return { ok = true, response = args}
             end
         elseif item.count < min then
             local diff = min - item.count
-            local req = put(itName, diff, max, inv, slot)
+            local req = get(itName, diff, inv, slot)
             if not req.ok then
                 print("keepMinItemInSlot " .. req.error)
                 return req

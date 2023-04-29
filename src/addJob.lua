@@ -10,14 +10,14 @@ function execJob(job, count)
     local message = {endpoint="execJob", job=job, count=count}
     rednet.send(SERVER, message, PROTOCOL)
     local id, response = rednet.receive(PROTOCOL, TIMEOUT)
-    return response
+    return response or { ok = false, error = "server unreachable" }
 end
 
 function addJob(job)
     local message = {endpoint="addJob", job=job}
     rednet.send(SERVER, message, PROTOCOL)
     local id, response = rednet.receive(PROTOCOL, TIMEOUT)
-    return response
+    return response or { ok = false, error = "server unreachable" }
 end
 
 -- A JOB declaration
@@ -41,30 +41,6 @@ function listUnusedChests()
     return unusedChests
 end
 
-function getExistingJobs()
-    local existingJobs = {}
-    local message = {endpoint="jobs"}
-    rednet.send(SERVER, message, PROTOCOL)
-    local id, response = rednet.receive(PROTOCOL, TIMEOUT)
-    if response.ok then
-        existingJobs = response.response
-    end
-    return existingJobs
-end
-
-function getItemsName()
-    local names = {}
-    local message = {endpoint="info"}
-    rednet.send(SERVER, message, PROTOCOL)
-    local id, response = rednet.receive(PROTOCOL, TIMEOUT)
-    if response.ok then
-        for k, v in pairs(response.response) do
-            table.insert(names, k)
-        end
-    end
-    return names
-end
-
 function writeColor(text, col)
     col = col or colors.yellow
     old_color = term.getTextColor()
@@ -73,9 +49,35 @@ function writeColor(text, col)
     term.setTextColor(old_color)
 end
 
+function getServerInfos()
+    local message = {endpoint="all"}
+    rednet.send(SERVER, message, PROTOCOL)
+    local id, response = rednet.receive(PROTOCOL, TIMEOUT)
+    if response.ok then
+        return response.response
+    end
+end
+
+local infos = getServerInfos()
 local unusedChests = listUnusedChests()
-local itemsName = getItemsName()
-local existingJobs = getExistingJobs()
+local itemsName = infos.inventory
+local existingJobs = {unit=infos.jobs, cron=infos.cron}
+local acceptedCronTasks = infos.acceptedTasks
+
+function readCronTask()
+    writeColor("Choose type of task for this job (use arrow keys)\n")
+    local cronTask = read(nil, nil, function(text) 
+                            return completion.choice(text, acceptedCronTasks)
+                            end)
+    for _, c in ipairs(acceptedCronTasks) do
+        print(c)
+        print(cronTask)
+        if cronTask == c then
+            return cronTask
+        end
+    end
+    return readCronTask()
+end
 
 function readInventory()
     writeColor("choose inventory to apply this\n")
@@ -125,6 +127,12 @@ function readCount()
     return tonumber(count) or "*"
 end
 
+function readMin()
+    writeColor("Choose min quantity to keep (default=1)\n")
+    local count = read(nil, nil, nil, "1")
+    return tonumber(count) or 1
+end
+
 function readFrequency()
     writeColor("Choose job frequency (default=10)\n")
     local count = read(nil, nil, nil, "10")
@@ -141,12 +149,14 @@ end
 function readJobName()
     writeColor("Choose name for this job:\n")
     local name = read(nil, nil, function(text) return completion.choice(text, itemsName) end)
-    if name == "" or existingJobs[name] then
+    if name == "" or existingJobs.cron[name] or existingJobs.unit[name] then
         writeColor("Job with name: [" .. name .. "] is not available\n", colors.red)
         return readJobName()
     end
     return name
 end
+
+
 
 function addTask(tasklist)
     writeColor("Choosing option for task number" .. #tasklist + 1 .. " ...\n", colors.green)
@@ -161,11 +171,11 @@ function addTask(tasklist)
     end
 end
 
-writeColor("Type of job to add: cron/regular [c/r]\n> ")
-local jobtype = read(nil, nil, nil, "r")
-if jobtype ~= "c" then jobtype = "r" end
+writeColor("Type of job to add: cron/regular\n> ")
+local jobtype = read(nil, nil, function(text) return completion.choice(text, {"regular", "cron"}) end)
+if jobtype ~= "cron" then jobtype = "regular" end
 
-if jobtype == "r" then
+if jobtype == "regular" then
     -- TODO: if no chest available display message
     -- Regular job
     local job = {name=readJobName(), tasks={}, type="unit"}
@@ -191,14 +201,21 @@ else
         writeColor("Wrong inventory name\n", colors.red)
         return false
     end
+    local exec = readCronTask()
+    local min, item
+    if exec == "keepMinItemInSlot" then 
+        min = readMin()
+        item = readItemName()
+    end
     local slot = readSlot()
     local freq = readFrequency()
-    local params = {location=inv, slot=slot}
-    table.insert(job.tasks, {exec="listenInventory", params=params, freq=freq})
+    local params = {location=inv, slot=slot, min=min, item=item}
+    table.insert(job.tasks, {exec=exec, params=params, freq=freq})
     -- TODO add multiple tasks features for cron jobs
     local resp = addJob(job)
     if resp.ok then
         writeColor("Successfully added cron job", colors.green)
+        os.sleep(2)
     else
         writeColor(resp.error .. "\n")
     end

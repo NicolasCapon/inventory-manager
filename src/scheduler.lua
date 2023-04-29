@@ -9,12 +9,11 @@ function Scheduler:new(obj, tasks)
 end
 
 function Scheduler:addTask(task, name)
-    if type(task.exec) ~= "function" then
-        error("bad argument, function expected, got " .. type(task.exec) .. ")", 3)
+    if type(task) ~= "function" then
+        error("bad argument, function expected, got " .. type(task) .. ")", 3)
     else
-        local t = 
         table.insert(self.tasks, {name=name,
-                                  routine=coroutine.create(task.exec)})
+                                  routine=coroutine.create(task)})
         os.queueEvent("new task")
         return true
     end
@@ -54,9 +53,12 @@ function Scheduler:run()
             end
         end
         for n = 1, count do
-            local r = self.tasks[n].routine
-            if r and coroutine.status(r) == "dead" then
-                self.tasks[n] = nil
+            local task = self.tasks[n]
+            if task then
+                local r = task.routine
+                if r and coroutine.status(r) == "dead" then
+                    self.tasks[n] = nil
+                end
             end
         end
         eventData = table.pack(os.pullEventRaw())

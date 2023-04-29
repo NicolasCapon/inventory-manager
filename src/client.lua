@@ -331,6 +331,7 @@ function invokeLiveParamsPopup(job, liveParams, count)
         local valueObj = frame:addList():setPosition(1, y + 2)
             :setSize("parent.w", 3)
             :setBackground(colors.yellow)
+
         local function filter(self, event, key)
             local filterStr = self:getValue()
             if filterStr:len() > 2 then
@@ -353,14 +354,15 @@ function invokeLiveParamsPopup(job, liveParams, count)
             :setSize("parent.w", 1)
             :setBackground(colors.white)
             :onChange(filter)
-        y = y + 2 -- also add +1 for valueObj that we set earlier
+
+        y = y + 5 -- also add +1 for valueObj that we set earlier
         for key, value in pairs(inventory) do
             valueObj:addItem(key)
         end
         local function getValue()
             return valueObj:getValue().text
         end
-        return getValue
+        return y, getValue
     end
 
     -- Create a UI bloc and return a function to collect item count
@@ -372,11 +374,12 @@ function invokeLiveParamsPopup(job, liveParams, count)
             :setPosition(1, y)
             :setSize("parent.w", 1)
             :setBackground(colors.white)
-        y = y + 1
+            :setDefaultText("1")
+        y = y + 2
         local function getValue()
             return valueObj:getValue()
         end
-        return getValue
+        return y, getValue
     end
 
     -- Create a UI bloc and return a function to collect destination chest
@@ -397,11 +400,11 @@ function invokeLiveParamsPopup(job, liveParams, count)
         for _, chest in ipairs(satelliteChests) do
             valueObj:addItem(chest)
         end
-        y = y + 1
+        y = y + 2
         local function getValue()
             return valueObj:getValue()
         end
-        return getValue()
+        return y, getValue()
     end
 
     -- Create popup frame
@@ -426,13 +429,15 @@ function invokeLiveParamsPopup(job, liveParams, count)
                     :setSize("parent.w", 1)
                     :setBackground(colors.blue)
                 y = y + 1
+                firstParam = false
             end
+            log(y, true)
             if param == "item" then
-                getValueFns[param] = createItemBloc(y, f, "Item name", first)
+                y, getValueFns[param] = createItemBloc(y, f, "- Item name", first)
             elseif param == "count" then
-                getValueFns[param] = createCountBloc(y, f, "Item count", first)
+                y, getValueFns[param] = createCountBloc(y, f, "- Item count", first)
             elseif param == "location" then
-                getValueFns[param] = createLocBloc(y, f, "Export chest", first)
+                y, getValueFns[param] = createLocBloc(y, f, "- Export chest", first)
             end
             if first then first = false end -- next tasks are not the first
         end
@@ -461,15 +466,16 @@ function invokeLiveParamsPopup(job, liveParams, count)
         else
             log(request.error)
         end
+        main:setFocusedObject(input)
     end
 
-    -- Keyboard navigation option for this frame
-    f:setOnKey(function(self, key, event)
+    local function nav(self, event, key)
         if key == keys.enter then
             collectValues()
         end
-    end)
-
+    end
+    f:getObject("focus"):onKey(nav)
+                               
     -- Finally add buttons
     f:addButton("okLive"):setText("OK")
         :setPosition("parent.w - 9", "parent.h")
