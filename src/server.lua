@@ -59,7 +59,6 @@ function listSatelliteChests()
     for _, remote in ipairs(modem.getNamesRemote()) do
         if not inventoryChests[remote] then
             satelliteChests[remote] = true
-            print(remote)
         end
     end
     return satelliteChests
@@ -714,7 +713,6 @@ function keepMinItemInSlot(...)
     local min = args.min or 1
     local itName = args.item
     local ok, item = pcall(modem.callRemote, inv, "getItemDetail", slot)
-    print("minItem", ok, min, slot, inv,itName)
     if ok then
         if not item then
             local req = get(itName, min, inv, slot)
@@ -727,7 +725,6 @@ function keepMinItemInSlot(...)
             local diff = min - item.count
             local req = get(itName, diff, inv, slot)
             if not req.ok then
-                print("keepMinItemInSlot " .. req.error)
                 return req
             else
                 return { ok = true, response = args}

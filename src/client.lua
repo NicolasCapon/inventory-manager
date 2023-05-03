@@ -1,7 +1,7 @@
 local basalt = require("basalt")
 
 local modem = peripheral.find("modem") or error("No modem attached", 0)
-rednet.open("right")
+peripheral.find("modem", rednet.open)
 
 local listIsFiltered = false
 local inventory = {} -- dict
@@ -431,7 +431,6 @@ function invokeLiveParamsPopup(job, liveParams, count)
                 y = y + 1
                 firstParam = false
             end
-            log(y, true)
             if param == "item" then
                 y, getValueFns[param] = createItemBloc(y, f, "- Item name", first)
             elseif param == "count" then

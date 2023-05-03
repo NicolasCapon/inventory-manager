@@ -1,6 +1,6 @@
 local completion = require "cc.completion"
 local modem = peripheral.find("modem") or error("No modem attached", 0)
-rednet.open("right")
+peripheral.find("modem", rednet.open)
 
 local SERVER = 6
 local PROTOCOL = "INVENTORY"
@@ -60,7 +60,10 @@ end
 
 local infos = getServerInfos()
 local unusedChests = listUnusedChests()
-local itemsName = infos.inventory
+local itemsName = {}
+for key, _ in pairs(infos.inventory) do
+    table.insert(itemsName, key)
+end
 local existingJobs = {unit=infos.jobs, cron=infos.cron}
 local acceptedCronTasks = infos.acceptedTasks
 
@@ -70,8 +73,6 @@ function readCronTask()
                             return completion.choice(text, acceptedCronTasks)
                             end)
     for _, c in ipairs(acceptedCronTasks) do
-        print(c)
-        print(cronTask)
         if cronTask == c then
             return cronTask
         end
@@ -94,8 +95,8 @@ function readInventory()
         end
     end
     if not status then
-        print("wrong inventory name provided...")
-        return status
+        writeColor("wrong inventory name provided...\n", colors.red)
+        return readInventory()
     end
     return inv
 end
@@ -115,8 +116,8 @@ function readItemName()
         end
     end
     if not status then
-        print("wrong item name provided...")
-        return status
+        writeColor("wrong item name provided...\n", colors.red)
+        return readItemName()
     end
     return it
 end
@@ -148,7 +149,7 @@ end
 
 function readJobName()
     writeColor("Choose name for this job:\n")
-    local name = read(nil, nil, function(text) return completion.choice(text, itemsName) end)
+    local name = read()
     if name == "" or existingJobs.cron[name] or existingJobs.unit[name] then
         writeColor("Job with name: [" .. name .. "] is not available\n", colors.red)
         return readJobName()

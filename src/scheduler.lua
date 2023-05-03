@@ -28,11 +28,11 @@ function Scheduler:removeTasksByName(name)
 end
 
 function Scheduler:run()
-    local count = #self.tasks
     local tFilters = {}
     local eventData = { n = 0 }
     while true do
-        if #self.tasks == 0 then
+        local count = #self.tasks
+        if count == 0 then
             -- If no task planned, wait for new task before continuing the loop
             os.pullEvent("new task")
         end
