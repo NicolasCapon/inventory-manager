@@ -194,6 +194,7 @@ if jobtype == "regular" then
     else
         writeColor(resp.error .. "\n")
     end
+    os.sleep(2)
 else
     -- Cron job
     local job = {name=readJobName(), tasks={}, type="cron"}

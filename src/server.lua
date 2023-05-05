@@ -7,7 +7,6 @@ RECIPES_FILE = "recipes.txt"
 JOBS_FILE = "jobs.txt"
 LOG_FILE = "server.log"
 ALLOWED_INVENTORIES = {}
-ALLOWED_INVENTORIES["minecraft:chest"] = true
 ALLOWED_INVENTORIES["metalbarrels:gold_tile"] = true
 VARIABLELIMIT = false
 
@@ -659,7 +658,7 @@ function execJob(name, liveParams, n)
             p[key] = value
         end
         -- Apply multiplier if we need to execJob n times (default=1)
-        p["count"] = p["count"] or 1
+        p["count"] = tonumber(p["count"]) or 1
         p["count"] = p["count"] * n
         if task.exec == "sendItemToInventory" then
             local request = sendItemToInventory(p)
