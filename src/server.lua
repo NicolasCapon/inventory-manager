@@ -204,7 +204,6 @@ function loadJobs()
     -- them on scanAll
     local n = 0
     for jobType, jobList in pairs(jobs) do -- For each type of job
-        -- print(textutils.serialize(value))
         for name, job  in pairs(jobList) do -- For each job of this type
             if jobType == "cron" then
                 addToScheduler(job)
@@ -572,9 +571,22 @@ function decodeMessage(message, client)
         response = removeJob(message.job)
     elseif message.endpoint == "execJob" then
         response = execJob(message.job, message.params, message.count)
+    elseif message.endpoint == "updateClients" then
+        response = updateClients()
     end
     local ok, err = pcall(sendResponse, client, response)
     if not ok then print(err) end
+end
+
+-- Notify all client about changes
+function updateClients()
+    local message = { inventory=inventory,
+                      recipes=recipes,
+                      jobs=jobs.unit,
+                      acceptedTasks=acceptedTasks,
+                      cron=jobs.cron }
+    rednet.broadcast(message, "UPDATE")
+    return { ok = true, response = "updateClients" }
 end
 
 function handleRequests()
@@ -657,10 +669,11 @@ function execJob(name, liveParams, n)
             end
         end
     end
+    updateClients()
     return {ok=status, response={job=job, count=count}, error=error}
 end
 
--- Job function
+-- Regular job function
 function sendItemToInventory(...)
     -- Take table as input:
     -- {item=itemName, location=chestName, count=itemCount, slot=chestSlot}
@@ -685,6 +698,7 @@ function listenInventory(...)
                 print(request.error)
                 return request
             else
+                updateClients()
                 return {ok=true, response=inv}
             end
         else
@@ -703,6 +717,7 @@ function listenInventory(...)
         n = n + 1
         ok, item = pcall(modem.callRemote, inv, "getItemDetail", n)
     end
+    updateClients()
     return {ok=true, response=inv}
 end
 
@@ -719,6 +734,7 @@ function keepMinItemInSlot(...)
             if not req.ok then
                 return req
             else
+                updateClients()
                 return { ok = true, response = args}
             end
         elseif item.count < min then
@@ -727,6 +743,7 @@ function keepMinItemInSlot(...)
             if not req.ok then
                 return req
             else
+                updateClients()
                 return { ok = true, response = args}
             end
         end

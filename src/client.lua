@@ -17,11 +17,10 @@ local itemsList = main:getObject("itemsList")
 function sendMessage(message, modem)
     local SERVER = 6 --TODO put real computer ID here
     local PROTOCOL = "INVENTORY"
-    local TIMEOUT = 2
 
     message["from"] = modem.getNameLocal()
     rednet.send(SERVER, message, PROTOCOL)
-    local id, response = rednet.receive(PROTOCOL, TIMEOUT)
+    local id, response = rednet.receive(PROTOCOL)
     if not id then
         response = { ok = false, response = {}, error = "Server unreachable" }
         log(response.error, true)
@@ -65,6 +64,48 @@ function resetState()
     itemsList:setOffset(0)
 end
 
+-- Notify all clients that we update inventory
+function broadcastUpdate()
+    local msg = { endpoint = "updateClients" }
+    sendMessage(msg, modem)
+end
+
+-- Listen for server notification about updating inventory
+function listenServerUpdates()
+    while true do
+        local id, message = rednet.receive("UPDATE")
+        if id then
+            updateItemsListCount(message.inventory)
+        end
+    end
+end
+
+-- Update items count in itemsList
+function updateItemsListCount(inv)
+    local itemIndex = itemsList:getItemIndex()
+    for i, item in ipairs(itemsList:getAll()) do
+        local targs = table.unpack(item.args)
+        if targs.type == "inventory" then
+            local updated = false
+            for name, value in pairs(inv) do
+                if targs.name == name then
+                    local itname = getItemCount(value) .. "\t" .. name
+                    local args = {type="inventory", name=name}
+                    itemsList:editItem(i, itname, nil, nil, args)
+                    updated = true
+                end
+            end
+            if not updated then
+                local itname = "0 \t" .. targs.name
+                local args = {type="inventory", name=targs.name}
+                itemsList:editItem(i, itname, nil, nil, args)
+            end
+        end
+    end
+    itemsList:selectItem(itemIndex)
+    inventory = inv
+end
+
 -- Update items in list based on a string filter
 function updateItemsList(filter)
     items = {}
@@ -73,7 +114,9 @@ function updateItemsList(filter)
         for key, value in pairs(inventory) do
             if string.find(key, filter) then
                 table.insert(items, key)
-                itemsList:addItem(getItemCount(value) .. "\t" .. key)
+                local itname = getItemCount(value) .. "\t" .. key
+                local args = {type="inventory", name=key}
+                itemsList:addItem(itname, nil, nil, args)
             end
         end
         -- Display available recipes for unavailable items
@@ -82,7 +125,8 @@ function updateItemsList(filter)
                 -- Item not in inventory, display recipe instead
                 if string.find(key, filter) then
                     table.insert(items, key)
-                    itemsList:addItem("%\t" .. key, colors.purple)
+                    local args = {type="recipe", name=key}
+                    itemsList:addItem("%\t" .. key, colors.purple, nil, args)
                 end
             end
         end
@@ -90,26 +134,31 @@ function updateItemsList(filter)
         for key, value in pairs(jobs) do
             if string.find(key, filter) then
                 table.insert(items, key)
-                itemsList:addItem("@\t" .. key, colors.lime)
+                local args = {type="job", name=key}
+                itemsList:addItem("@\t" .. key, colors.lime, nil, args)
             end
         end
     else
         for key, value in pairs(inventory) do
             table.insert(items, key)
-            itemsList:addItem(getItemCount(value) .. "\t" .. key)
+            local itname = getItemCount(value) .. "\t" .. key
+            local args = { type = "inventory", name = key }
+            itemsList:addItem(itname, nil, nil, args)
         end
         -- Display available recipes for unavailable items
         for key, value in pairs(recipes) do
             if not inventory[key] then
                 -- Item not in inventory, display recipe instead
                 table.insert(items, key)
-                itemsList:addItem("%\t" .. key)
+                local args = {type="recipe", name=key}
+                itemsList:addItem("%\t" .. key, nil, nil, args)
             end
         end
         -- Display jobs
         for key, value in pairs(jobs) do
             table.insert(items, key)
-            itemsList:addItem("@\t" .. key, colors.lime)
+            local args = {type="job", name=key}
+            itemsList:addItem("@\t" .. key, colors.lime, nil, args)
         end
     end
 end
@@ -163,6 +212,7 @@ function make(name, count)
     if not craft(recipe, count).ok then
         return false
     end
+    broadcastUpdate()
     return true
 end
 
@@ -263,6 +313,7 @@ function dump(self, event, button, x, y)
     end
     if self then
         -- Avoid calling this when using this function without handler
+        broadcastUpdate()
         resetState()
     end
     return { ok = true, message = "dump", error = "" }
@@ -534,6 +585,7 @@ function getSelectedItem(self, event, button, x, y)
         if not get(selectedItem, count) then return false end
     end
     -- Reset position and values
+    broadcastUpdate()
     resetState()
 end
 
@@ -623,4 +675,4 @@ main:setFocusedObject(input)
 
 sync()
 updateItemsList()
-basalt.autoUpdate()
+parallel.waitForAll(basalt.autoUpdate, listenServerUpdates)
