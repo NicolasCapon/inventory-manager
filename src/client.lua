@@ -14,7 +14,7 @@ local countInput = main:getObject("countInput")
 local itemsList = main:getObject("itemsList")
 
 
-function sendMessage(message, modem)
+function sendMessage(message, modem, ignoreErrors)
     local SERVER = 6 --TODO put real computer ID here
     local PROTOCOL = "INVENTORY"
 
@@ -24,7 +24,7 @@ function sendMessage(message, modem)
     if not id then
         response = { ok = false, response = {}, error = "Server unreachable" }
         log(response.error, true)
-    elseif not response.ok then
+    elseif not response.ok and not ignoreErrors then
         log(response.error, true)
     end
     return response
@@ -288,7 +288,7 @@ function learnRecipe(self, event, button, x, y)
         recipe["name"]  = turtle.getItemDetail(16).name
         recipe["count"] = turtle.getItemDetail(16).count
         local msg = { endpoint = "add", recipe = recipe }
-        local request   = sendMessage(msg, modem)
+        local request   = sendMessage(msg, modem, true)
         if request.ok then
             log("New recipe [" .. recipe["name"] .. "] learned.")
             sync()
