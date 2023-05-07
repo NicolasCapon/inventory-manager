@@ -17,10 +17,11 @@ local itemsList = main:getObject("itemsList")
 function sendMessage(message, modem, ignoreErrors)
     local SERVER = 6 --TODO put real computer ID here
     local PROTOCOL = "INVENTORY"
+    local TIMEOUT = 1
 
     message["from"] = modem.getNameLocal()
     rednet.send(SERVER, message, PROTOCOL)
-    local id, response = rednet.receive(PROTOCOL)
+    local id, response = rednet.receive(PROTOCOL, TIMEOUT)
     if not id then
         response = { ok = false, response = {}, error = "Server unreachable" }
         log(response.error, true)
@@ -73,9 +74,13 @@ end
 -- Listen for server notification about updating inventory
 function listenServerUpdates()
     while true do
-        local id, message = rednet.receive("UPDATE")
+        local id, message = rednet.receive("notification")
         if id then
-            updateItemsListCount(message.inventory)
+            if message.type == "inventory_update" then
+                updateItemsListCount(message.inventory)
+            elseif message.type == "server_start" then
+                resetState()
+            end
         end
     end
 end
@@ -300,7 +305,7 @@ end
 
 function dump(self, event, button, x, y)
     for i = 1, 16 do
-        local item = turtle.getItemDetail(i)
+        local item = turtle.getItemDetail(i, true)
         if item ~= nil then
             local message = { endpoint = "put", item = item, slot = i }
             local request = sendMessage(message, modem)
@@ -355,13 +360,7 @@ function get(name, count)
             count = maxCount
         end
     end
-    local slot
-    -- If count is superior to 64, dont specify slot for pushItem() to be able
-    -- to push in other free slots
-    if count < 65 then
-        slot = turtle.getSelectedSlot()
-    end
-    local msg = { item = name, endpoint = "get", count = count, slot = slot }
+    local msg = { item = name, endpoint = "get", count = count }
     return sendMessage(msg, modem).ok
 end
 
