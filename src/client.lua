@@ -288,10 +288,12 @@ function learnRecipe(self, event, button, x, y)
     end
     -- craft in last slot
     turtle.select(16)
-    -- pcall here
-    if turtle.craft() then
-        recipe["name"]  = turtle.getItemDetail(16).name
-        recipe["count"] = turtle.getItemDetail(16).count
+    if turtle.craft() and counter > 0 then
+        if turtle.getItemDetail(16) then
+            recipe["name"]  = turtle.getItemDetail(16).name
+            recipe["count"] = turtle.getItemDetail(16).count
+        else
+        end
         local msg = { endpoint = "add", recipe = recipe }
         local request   = sendMessage(msg, modem, true)
         if request.ok then
