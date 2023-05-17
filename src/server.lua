@@ -226,7 +226,10 @@ function loadRecipes()
     if not fs.exists(RECIPES_FILE) then return {} end
     for line in io.lines(RECIPES_FILE) do
         local recipe = textutils.unserialize(line)
-        recipes[recipe.name] = recipe 
+        if not recipes[recipe.name] then
+            recipes[recipe.name] = {}
+        end
+        table.insert(recipes[recipe.name], recipe)
         n = n + 1
     end
     print( n .. " recipes loaded from ".. RECIPES_FILE)
@@ -370,7 +373,10 @@ function saveRecipe(recipe)
     local file = fs.open(RECIPES_FILE, "a")
     file.write(textutils.serialize(recipe, { compact = true }) .. "\n")
     file.close()
-    recipes[recipe.name] = recipe
+    if not recipes[recipe.name] then
+        recipes[recipe.name] = {}
+    end
+    table.insert(recipes[recipe.name], recipe)
     return {ok=true, response=recipe, error=""}
 end
 
@@ -460,18 +466,26 @@ function getAvailability(recipe, count, dependencies, lvl, inventoryCount, missi
     for key, value in pairs(toCraft) do
         local recipeToCraft = recipes[key]
         if recipeToCraft ~= nil then
-            -- if recipe produce more than one item, adjust number to craft
-            value = math.ceil(value / recipeToCraft.count) -- round up
-            -- Recurse this function
-            local request = getAvailability(recipeToCraft, value, dependencies, lvl, inventoryCount, missing, ok)
-            -- if a step fail, whole status must be false
-            if not request.ok then
+            local recipeFound = false
+            for _, rec in ipairs(recipeToCraft) do
+                -- if recipe produce more than one item, adjust number to craft
+                value = math.ceil(value / rec.count) -- round up
+                -- Recurse this function
+                local request = getAvailability(rec, value, dependencies, lvl, inventoryCount, missing, ok)
+                -- if a step fail, whole status must be false
+                if request.ok then
+                    recipeFound = rec
+                    break
+                end
+            end
+            if not recipeFound then
                 ok = false
+                -- TODO could break here ?
             end
             -- update recursive values
             inventoryCount = request.response.inventoryCount
             missing = request.response.missing
-            dependencies = addDependency(request.response.dependencies, recipeToCraft, value, lvl)
+            dependencies = addDependency(request.response.dependencies, recipeFound, value, lvl)
         else
             -- Item is raw material without enough quantity or 
             -- we dont have a recipe for it. Throw error

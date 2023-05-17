@@ -125,7 +125,7 @@ function updateItemsList(filter)
             end
         end
         -- Display available recipes for unavailable items
-        for key, value in pairs(recipes) do
+        for key, _ in pairs(recipes) do
             if not inventory[key] then
                 -- Item not in inventory, display recipe instead
                 if string.find(key, filter) then
@@ -151,7 +151,7 @@ function updateItemsList(filter)
             itemsList:addItem(itname, nil, nil, args)
         end
         -- Display available recipes for unavailable items
-        for key, value in pairs(recipes) do
+        for key, _ in pairs(recipes) do
             if not inventory[key] then
                 -- Item not in inventory, display recipe instead
                 table.insert(items, key)
@@ -186,18 +186,27 @@ function make(name, count)
         log("Dump first")
         return false
     end
-    local recursive = true
-    local recipe = recipes[name]
-    if not recipe then return false end
-    local dependencies = {}
-    -- For recipe producing more than one, adjust count to avoid surproducing
-    count = math.ceil(count / recipe.count)
-    local msg = { endpoint = "make", recipe = recipe, count = count }
-    local request = sendMessage(msg, modem)
-    if request.ok then
-        dependencies = request.response.dependencies
-    else
-        log("Missing items: (click)\n" .. textutils.serialize(request.error))
+    local givenRecipes = recipes[name]
+    if not givenRecipes then return false end
+    local foundRecipe
+    local dependencies
+    local missing = {}
+    -- Find first recipe available
+    for _, recipe in ipairs(givenRecipes) do
+        -- For recipe producing more than one, adjust count to avoid overproducing
+        count = math.ceil(count / recipe.count)
+        local msg = { endpoint = "make", recipe = recipe, count = count }
+        local request = sendMessage(msg, modem)
+        if request.ok then
+            foundRecipe = recipe
+            dependencies = request.response.dependencies
+            break
+        else
+            table.insert(missing, request.error)
+        end
+    end
+    if not foundRecipe then
+        log("Missing items: (click)\n" .. textutils.serialize(missing))
         return false
     end
     local deplvl = dependencies["maxlvl"]
@@ -206,7 +215,14 @@ function make(name, count)
             -- Avoid maxlvl entry
             if dependency ~= "maxlvl" then
                 if value.lvl == deplvl then
-                    if not craft(recipes[dependency], value.count).ok then
+                    local dependencyOK
+                    for _, rec in ipairs(recipes[dependency]) do
+                        if craft(rec, value.count).ok then
+                            dependencyOK = true
+                            break
+                        end
+                    end
+                    if not dependencyOK then
                         return false
                     end
                 end
@@ -214,7 +230,7 @@ function make(name, count)
         end
         deplvl = deplvl - 1
     end
-    if not craft(recipe, count).ok then
+    if not craft(foundRecipe, count).ok then
         return false
     end
     broadcastUpdate()
