@@ -410,7 +410,7 @@ function addDependency(dependencies, recipe, count, lvl)
         dependencies["maxlvl"] = lvl
     end
     if dependencies[recipe.name] == nil then
-        dependencies[recipe.name] = {lvl=lvl, count=count} 
+        dependencies[recipe.name] = {lvl=lvl, count=count}
     else
         if dependencies[recipe.name].lvl < lvl then
             -- lvl up dependency
@@ -467,11 +467,18 @@ function getAvailability(recipe, count, dependencies, lvl, inventoryCount, missi
         local recipeToCraft = recipes[key]
         if recipeToCraft ~= nil then
             local recipeFound = false
+            local request
             for _, rec in ipairs(recipeToCraft) do
                 -- if recipe produce more than one item, adjust number to craft
                 value = math.ceil(value / rec.count) -- round up
                 -- Recurse this function
-                local request = getAvailability(rec, value, dependencies, lvl, inventoryCount, missing, ok)
+                request = getAvailability(rec,
+                                          value,
+                                          copy(dependencies),
+                                          lvl,
+                                          copy(inventoryCount),
+                                          copy(missing),
+                                          ok)
                 -- if a step fail, whole status must be false
                 if request.ok then
                     recipeFound = rec
