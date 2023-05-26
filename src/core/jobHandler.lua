@@ -1,8 +1,6 @@
+local config = require("config")
 local utils = require("utils")
 local jobsLib = require("jobs")
-
-local JobHandler = {}
-JobHandler.__index = JobHandler
 
 -- Unserialize jobs from file if possible else returns empty job list
 local function loadJobsFromFile(filename)
@@ -14,12 +12,17 @@ local function loadJobsFromFile(filename)
     return jobs
 end
 
+local JobHandler = {}
+JobHandler.__index = JobHandler
+
 -- JobHandler constructor
-function JobHandler:new(scheduler)
+function JobHandler:new(inventory, scheduler)
     local o = {}
     setmetatable(o, JobHandler)
+    o.inventory = inventory
+    o.ioChests = inventory.ioChests
     o.scheduler = scheduler
-    o.jobs = loadJobsFromFile(JOBS_FILE)
+    o.jobs = loadJobsFromFile(config.JOBS_FILE)
     return o
 end
 
@@ -30,7 +33,8 @@ function JobHandler:addToScheduler(job)
         keepMinItemInSlot = jobsLib.keepMinItemInSlot
     }
     for _, task in ipairs(job.tasks) do
-        if itemInList(task.exec, acceptedTasks) then
+        if utils.itemInList(task.exec, config.ACCEPTED_TASKS) then
+            task.params.inventory = self.inventory
             local fn = function()
                 while true do
                     tasks[task.exec](task.params)
@@ -48,7 +52,7 @@ function JobHandler:removeJob(job)
     end
     self.jobs[job.type][job.name] = nil
     return {
-        ok = utils.overwriteFile(JOBS_FILE, self.jobs),
+        ok = utils.overwriteFile(config.JOBS_FILE, self.jobs),
         response = job,
         error = "Cannot write to file"
     }
@@ -60,7 +64,7 @@ function JobHandler:loadJobs()
     for jobType, jobList in pairs(self.jobs) do -- For each type of job
         for _, job in pairs(jobList) do         -- For each job of this type
             if jobType == "cron" then
-                addToScheduler(job)
+                self:addToScheduler(job)
             end
             for _, task in ipairs(job.tasks) do -- For each task for this job
                 self.ioChests[task.params.location] = true
@@ -73,9 +77,9 @@ function JobHandler:addJob(job)
     local response
     if not self.jobs[job.type][job.name] then
         self.jobs[job.type][job.name] = job
-        utils.overwriteFile(JOBS_FILE, self.jobs) -- Write down that job
+        utils.overwriteFile(config.JOBS_FILE, self.jobs) -- Write down that job
         if job.type == "cron" then
-            addToScheduler(job)
+            self:addToScheduler(job)
         end
         response = { ok = true, response = job }
     else
@@ -92,7 +96,9 @@ end
 -- liveParams override parameters for the tasks if provided. This param should
 -- be a list of table with same length as job.tasks
 function JobHandler:execJob(name, liveParams, n)
-    if not self.jobs.unit[name] then return { ok = false, error = "No job for name: " .. name } end
+    if not self.jobs.unit[name] then
+        return { ok = false, error = "No job for name: " .. name }
+    end
     local job = self.jobs.unit[name]
     -- set defaults
     liveParams = liveParams or { {} } -- List of table
@@ -108,8 +114,9 @@ function JobHandler:execJob(name, liveParams, n)
             p[key] = value
         end
         -- Apply multiplier if we need to execJob n times (default=1)
-        p["count"] = tonumber(p["count"]) or 1
-        p["count"] = p["count"] * n
+        p.count = tonumber(p.count) or 1
+        p.count = p.count * n
+        p.inventory = self.inventory
         if task.exec == "sendItemToInventory" then
             local request = jobsLib.sendItemToInventory(p)
             if request and not request.ok then
@@ -118,7 +125,7 @@ function JobHandler:execJob(name, liveParams, n)
             end
         end
     end
-    updateClients()
+    utils.updateClients()
     return {
         ok = status,
         response = { job = job },

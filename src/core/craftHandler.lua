@@ -1,14 +1,31 @@
-require("config")
+local config = require("config")
 local utils = require("utils")
 
 local CraftHandler = {}
 CraftHandler.__index = CraftHandler
 
+-- In case of bulk crafting, remove excess items from recipe
+local function removeExcessiveItems(recipe)
+    local min = 64
+    for _, item in ipairs(recipe.items) do
+        if item.count < min then
+            min = item.count
+        end
+        -- Assume a recipe cannot contains more than 1 item per slot
+        item.count = 1
+    end
+    -- Recipe output can contains more than one items, divide this by
+    -- previously calculated minimum
+    recipe.count = recipe.count / min
+    return recipe
+end
+
 -- Load recipes from file
 local function loadRecipes()
+    -- TODO handle idCount here
     local recipes = {}
-    if not fs.exists(RECIPES_FILE) then return {} end
-    for line in io.lines(RECIPES_FILE) do
+    if not fs.exists(config.RECIPES_FILE) then return {} end
+    for line in io.lines(config.RECIPES_FILE) do
         local recipe = textutils.unserialize(line)
         if not recipes[recipe.name] then
             recipes[recipe.name] = {}
@@ -34,8 +51,11 @@ local function addDependency(dependencies, recipe, count, lvl)
         -- lvl up max lvl of dependencies if necessary
         dependencies["maxlvl"] = lvl
     end
+    -- TODO use id instead of recipe.name
     if dependencies[recipe.name] == nil then
         dependencies[recipe.name] = { lvl = lvl, count = count }
+        -- TODO Use this instead
+        -- dependencies[recipe.id] = { lvl = lvl, count = count, recipe = recipe }
     else
         if dependencies[recipe.name].lvl < lvl then
             -- lvl up dependency
@@ -59,9 +79,10 @@ local function checkMaterials(recipe, count, inventoryCount, inventory)
             -- materials are missing
             inventoryCount[item.name] = 0
             if toCraft[item.name] == nil then
+                -- item never encountered
                 toCraft[item.name] = diff
             else
-                -- usefull if recipe contains multiple of the same item
+                -- item already encountered, update missing count
                 toCraft[item.name] = toCraft[item.name] + diff
             end
         else
@@ -72,37 +93,26 @@ local function checkMaterials(recipe, count, inventoryCount, inventory)
     return inventoryCount, toCraft
 end
 
-local function removeExcessiveItems(recipe)
-    local min = 64
-    for _, item in ipairs(recipe.items) do
-        if item.count < min then
-            min = item.count
-        end
-        item.count = 1
-    end
-    recipe.count = recipe.count / min
-    return recipe
-end
-
 -- CraftHandler constructor
-function CraftHandler:new()
+function CraftHandler:new(inventory)
     local o = {}
     setmetatable(o, CraftHandler)
     o.recipes = loadRecipes()
+    o.inventory = inventory.inventory
+    -- Counter for recipe ids
+    -- TODO update all saved recipe to add ID
+    -- o.idCount = 0
     return o
 end
 
-function CraftHandler:loadRecipes()
-end
-
 function CraftHandler:saveRecipe(recipe)
-    if self.recipes[recipe.name] ~= nil then
+    if utils.itemInList(recipe, self.recipes[recipe.name]) then
         -- recipe already exist print error
         return { ok = false, response = recipe, error = "Recipe already exists" }
     end
     -- Assume each recipe cannot contains more than one item per slot
     recipe = removeExcessiveItems(recipe)
-    local file = fs.open(RECIPES_FILE, "a")
+    local file = fs.open(config.RECIPES_FILE, "a")
     file.write(textutils.serialize(recipe, { compact = true }) .. "\n")
     file.close()
     if not self.recipes[recipe.name] then
@@ -116,6 +126,9 @@ function CraftHandler:createRecipe(name, turtleID)
     -- create recipe from turtle inventory and serialize it to file
     local turtle = peripheral.wrap(turtleID)
     local recipe = { name = name, items = {} }
+    -- TODO
+    -- self.idCount = self.idCount + 1
+    -- local recipe = { name = name, items = {}, id = idCount }
     for i = 1, 16 do
         local item = turtle.getItemDetail(i)
         if item ~= nil then
@@ -134,8 +147,11 @@ function CraftHandler:getAvailability(recipe,
                                       lvl,
                                       inventoryCount,
                                       missing,
-                                      ok,
-                                      inventory)
+                                      inventory,
+                                      encountered)
+    -- Keep track of encountered recipe to avoid infinite recursion
+    encountered = encountered or {}
+    table.insert(encountered, recipe.name)
     -- get recipe dependencies for crafting in the right order
     dependencies = dependencies or { maxlvl = 0 }
     -- lvl is the lvl of recursion for this recipe
@@ -144,31 +160,33 @@ function CraftHandler:getAvailability(recipe,
     inventoryCount = inventoryCount or {}
     -- keep track of missing items
     missing = missing or {}
-    if ok == nil then ok = true end
+    local ok = true
 
     -- check items for this recipe
     local inventoryCount, toCraft = checkMaterials(recipe,
         count,
         inventoryCount,
-        inventory)
+        self.inventory)
     lvl = lvl + 1
     for key, value in pairs(toCraft) do
         local recipeToCraft = self.recipes[key]
-        if recipeToCraft ~= nil then
+        if recipeToCraft ~= nil and not utils.itemInList(key, encountered) then
+            table.insert(encountered, key)
             local recipeFound = false
             local request
             for _, rec in ipairs(recipeToCraft) do
+                table.insert(encountered, rec.name)
                 -- if recipe produce more than one item, adjust number to craft
                 value = math.ceil(value / rec.count) -- round up
                 -- Recurse this function
                 request = self:getAvailability(rec,
                     value,
-                    utils.copy(dependencies),
+                    dependencies,
                     lvl,
-                    utils.copy(inventoryCount),
-                    utils.copy(missing),
-                    ok,
-                    inventory)
+                    inventoryCount,
+                    missing,
+                    inventory,
+                    encountered)
                 -- if a step fail, whole status must be false
                 if request.ok then
                     recipeFound = rec
@@ -176,16 +194,18 @@ function CraftHandler:getAvailability(recipe,
                 end
             end
             if not recipeFound then
+                -- No recipe available. Stop searching
+                missing[key] = value
                 ok = false
-                -- TODO could break here ?
+            else
+                -- update recursive values
+                inventoryCount = request.response.inventoryCount
+                missing = request.response.missing
+                dependencies = addDependency(request.response.dependencies,
+                    recipeFound,
+                    value,
+                    lvl)
             end
-            -- update recursive values
-            inventoryCount = request.response.inventoryCount
-            missing = request.response.missing
-            dependencies = addDependency(request.response.dependencies,
-                recipeFound,
-                value,
-                lvl)
         else
             -- Item is raw material without enough quantity or
             -- we dont have a recipe for it. Throw error

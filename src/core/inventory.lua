@@ -1,6 +1,4 @@
-local ALLOWED_INVENTORIES = {}
-local ALLOWED_INVENTORIES["metalbarrels:gold_tile"] = true
-
+local config = require("config")
 
 local function clearInventory(input)
     local n = #input
@@ -110,12 +108,12 @@ function InventoryHandler:scanAll()
     local remotes = self.modem.getNamesRemote()
     local scans = {}
     for i, remote in pairs(remotes) do
-        if (ALLOWED_INVENTORIES[self.modem.getTypeRemote(remote)]
-            and self.io_inventories[remote] == nil) then
+        if (config.ALLOWED_INVENTORIES[self.modem.getTypeRemote(remote)]
+            and self.ioChests[remote] == nil) then
             self.inventoryChests[remote] = true
             table.insert(scans,
                          function()
-                            scanRemoteInventory(remote, VARIABLELIMIT)
+                            self:scanRemoteInventory(remote, false)
                          end)
         end
     end
@@ -161,7 +159,7 @@ function InventoryHandler:get(name, count, destination, slot)
                 local slot_count = inventory_count - ret
                 self.inventory[name][i]["slot"]["count"] = slot_count
                 if slot_count == 0 then
-                    table.insert(free, {
+                    table.insert(self.free, {
                         chest = chest,
                         slot = {
                             index = location.slot.index,
@@ -182,7 +180,7 @@ function InventoryHandler:get(name, count, destination, slot)
                     inventory_count,
                     slot)
                 -- add free slot, remove inventory slot and update count
-                table.insert(free, {
+                table.insert(self.free, {
                     chest = chest,
                     slot = {
                         index = location.slot.index,
@@ -212,7 +210,7 @@ end
 function InventoryHandler:put_in_free_slot(item, count, destination, slot)
     local name = item.name
     local maxCount = item.maxCount or 64
-    for i, fslot in ipairs(free) do
+    for i, fslot in ipairs(self.free) do
         local chest = fslot.chest
         local limit = fslot.slot.limit
         if limit > maxCount then
@@ -279,7 +277,7 @@ function InventoryHandler:put_in_free_slot(item, count, destination, slot)
                 }
             end
             -- update inventory
-            table.insert(lib.inventory[name], {
+            table.insert(self.inventory[name], {
                 chest = chest,
                 slot = {
                     index = fslot.slot.index,
@@ -323,10 +321,9 @@ function InventoryHandler:put(item, dest, slot)
     local name = item.name
     local count = item.count
     local maxCount = item.maxCount
-    local invItem = lib.inventory[name]
+    local invItem = self.inventory[name]
     if invItem == nil then
         -- if item not in inventory, fill free slots
-        print(textutils.serialize(item))
         self.inventory[name] = {}
         return self:put_in_free_slot(item, count, dest, slot)
     else

@@ -26,6 +26,7 @@ function sendMessage(message, modem, ignoreErrors)
         response = { ok = false, response = {}, error = "Server unreachable" }
         log(response.error, true)
     elseif not response.ok and not ignoreErrors then
+        log("Error while reaching server endpoint " .. message.endpoint .. " : ", true)
         log(response.error, true)
     end
     return response
@@ -74,11 +75,11 @@ end
 -- Listen for server notification about updating inventory
 function listenServerUpdates()
     while true do
-        local id, message = rednet.receive("notification")
+        local id, message = rednet.receive("NOTIFICATION")
         if id then
-            if message.type == "inventory_update" then
+            if message.type == "UPDATE_UI" then
                 updateItemsListCount(message.inventory)
-            elseif message.type == "server_start" then
+            elseif message.type == "SERVER_START" then
                 resetState()
             end
         end
@@ -196,7 +197,7 @@ function make(name, count)
         -- For recipe producing more than one, adjust count to avoid overproducing
         count = math.ceil(count / recipe.count)
         local msg = { endpoint = "make", recipe = recipe, count = count }
-        local request = sendMessage(msg, modem)
+        local request = sendMessage(msg, modem, true)
         if request.ok then
             foundRecipe = recipe
             dependencies = request.response.dependencies
@@ -206,15 +207,21 @@ function make(name, count)
         end
     end
     if not foundRecipe then
-        log("Missing items: (click)\n" .. textutils.serialize(missing))
+        log("Missing items: (click)\n" .. textutils.serialize(missing), true)
         return false
     end
+    log(dependencies, true)
     local deplvl = dependencies["maxlvl"]
     while deplvl > 0 do
         for dependency, value in pairs(dependencies) do
             -- Avoid maxlvl entry
             if dependency ~= "maxlvl" then
                 if value.lvl == deplvl then
+                    -- if not craft(value.recipe, value.count).ok then
+                    --     return false
+                    -- end
+                    -- TODO introduce recipe ID in addDependency and
+                    -- Remove FROM HERE
                     local dependencyOK
                     for _, rec in ipairs(recipes[dependency]) do
                         if craft(rec, value.count).ok then
@@ -225,6 +232,7 @@ function make(name, count)
                     if not dependencyOK then
                         return false
                     end
+                    -- Remove TO HERE
                 end
             end
         end
@@ -261,7 +269,7 @@ function craft(recipe, count)
         request = sendMessage(message, modem)
         if not request.ok then
             error = request.error
-            log(error)
+            log("Error while reaching server endpoint [get] : " .. error, true)
             status = false
             return request
         end
@@ -271,7 +279,7 @@ function craft(recipe, count)
     turtle.select(4)
     if not turtle.craft(count) then
         error = "error while crafting " .. recipe.name
-        log(error)
+        log(error, true)
         status = false
         return { ok = status, message = recipe, error = error }
     end

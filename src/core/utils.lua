@@ -1,4 +1,5 @@
-require("config")
+local config = require("config")
+
 local lib = {}
 
 -- Log message to given file
@@ -24,8 +25,16 @@ function lib.readFile(path)
     return content
 end
 
+
+-- Send notifications to all clients for updating UI
+function lib.updateClients()
+    local msg = { endpoint = "updateClients" }
+    rednet.send(6, msg, config.PROTOCOLS.MAIN)
+end
+
 -- Test if item is in list
 function lib.itemInList(it, list)
+    if not list then return false end
     for _, o in ipairs(list) do
         if it == o then
             return true
@@ -45,7 +54,7 @@ end
 function lib.copy(obj)
     if type(obj) ~= 'table' then return obj end
     local res = {}
-    for k, v in pairs(obj) do res[copy(k)] = copy(v) end
+    for k, v in pairs(obj) do res[lib.copy(k)] = lib.copy(v) end
     return res
 end
 
