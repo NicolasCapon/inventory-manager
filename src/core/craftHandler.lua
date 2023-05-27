@@ -21,9 +21,9 @@ local function removeExcessiveItems(recipe)
 end
 
 -- Load recipes from file
-local function loadRecipes()
-    -- TODO handle idCount here
+local function loadRecipes(idCount)
     local recipes = {}
+    local idCount = 1
     if not fs.exists(config.RECIPES_FILE) then return {} end
     for line in io.lines(config.RECIPES_FILE) do
         local recipe = textutils.unserialize(line)
@@ -31,8 +31,9 @@ local function loadRecipes()
             recipes[recipe.name] = {}
         end
         table.insert(recipes[recipe.name], recipe)
+        idCount = idCount + 1
     end
-    return recipes
+    return recipes, idCount
 end
 
 -- Count total of an item in inventory
@@ -51,17 +52,14 @@ local function addDependency(dependencies, recipe, count, lvl)
         -- lvl up max lvl of dependencies if necessary
         dependencies["maxlvl"] = lvl
     end
-    -- TODO use id instead of recipe.name
-    if dependencies[recipe.name] == nil then
-        dependencies[recipe.name] = { lvl = lvl, count = count }
-        -- TODO Use this instead
-        -- dependencies[recipe.id] = { lvl = lvl, count = count, recipe = recipe }
+    if dependencies[recipe.id] == nil then
+        dependencies[recipe.id] = { lvl = lvl, count = count, recipe = recipe }
     else
-        if dependencies[recipe.name].lvl < lvl then
+        if dependencies[recipe.id].lvl < lvl then
             -- lvl up dependency
-            dependencies[recipe.name].lvl = lvl
+            dependencies[recipe.id].lvl = lvl
         end
-        dependencies[recipe.name].count = dependencies[recipe.name].count + count
+        dependencies[recipe.id].count = dependencies[recipe.id].count + count
     end
     return dependencies
 end
@@ -93,22 +91,57 @@ local function checkMaterials(recipe, count, inventoryCount, inventory)
     return inventoryCount, toCraft
 end
 
+local function getItemCount(recipe)
+    total = {}
+    for _, item in ipairs(recipe.items) do
+        if total[item.name] then
+            total[item.name] = total[item.name] + item.count
+        else
+            total[item.name] = item.count
+        end
+    end
+    return total
+end
+
+-- Compare inputs and output of 2 recipes to tell if they are the same
+-- return either true or false
+local function recipeIsSame(rec1, rec2)
+    local same = true
+    if rec1.name == rec2.name then
+        -- If rec1 and rec2 have same output, compare inputs
+        local totalRec1 = getItemCount(rec1)
+        local totalRec2 = getItemCount(rec2)
+
+        for item, count in pairs(totalRec1) do
+            if totalRec2[item] then
+                if totalRec2[item] ~= count then
+                    same = false
+                end
+            end
+        end
+    end
+    return same
+end
+
 -- CraftHandler constructor
 function CraftHandler:new(inventory)
     local o = {}
     setmetatable(o, CraftHandler)
-    o.recipes = loadRecipes()
+    o.recipes, o.idCount = loadRecipes()
     o.inventory = inventory.inventory
-    -- Counter for recipe ids
-    -- TODO update all saved recipe to add ID
-    -- o.idCount = 0
     return o
 end
 
 function CraftHandler:saveRecipe(recipe)
-    if utils.itemInList(recipe, self.recipes[recipe.name]) then
-        -- recipe already exist print error
-        return { ok = false, response = recipe, error = "Recipe already exists" }
+    -- Test if recipe already exists
+    if self.recipes[recipe.name] then
+        for _, r in ipairs(self.recipes[recipe.name]) do
+            if recipeIsSame(recipe, r) then
+                return { ok = false,
+                         response = recipe,
+                         error = "Recipe already exists" }
+            end
+        end
     end
     -- Assume each recipe cannot contains more than one item per slot
     recipe = removeExcessiveItems(recipe)
@@ -125,10 +158,8 @@ end
 function CraftHandler:createRecipe(name, turtleID)
     -- create recipe from turtle inventory and serialize it to file
     local turtle = peripheral.wrap(turtleID)
-    local recipe = { name = name, items = {} }
-    -- TODO
-    -- self.idCount = self.idCount + 1
-    -- local recipe = { name = name, items = {}, id = idCount }
+    local recipe = { name = name, items = {}, id = self.idCount }
+    self.idCount = self.idCount + 1
     for i = 1, 16 do
         local item = turtle.getItemDetail(i)
         if item ~= nil then

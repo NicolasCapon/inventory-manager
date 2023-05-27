@@ -27,7 +27,6 @@ function JobHandler:new(inventory, scheduler)
 end
 
 function JobHandler:addToScheduler(job)
-    -- List of acceptedTasks, make this global ? TODO
     local tasks = {
         listenInventory = jobsLib.listenInventory,
         keepMinItemInSlot = jobsLib.keepMinItemInSlot

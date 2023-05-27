@@ -210,29 +210,15 @@ function make(name, count)
         log("Missing items: (click)\n" .. textutils.serialize(missing), true)
         return false
     end
-    log(dependencies, true)
     local deplvl = dependencies["maxlvl"]
     while deplvl > 0 do
         for dependency, value in pairs(dependencies) do
             -- Avoid maxlvl entry
             if dependency ~= "maxlvl" then
                 if value.lvl == deplvl then
-                    -- if not craft(value.recipe, value.count).ok then
-                    --     return false
-                    -- end
-                    -- TODO introduce recipe ID in addDependency and
-                    -- Remove FROM HERE
-                    local dependencyOK
-                    for _, rec in ipairs(recipes[dependency]) do
-                        if craft(rec, value.count).ok then
-                            dependencyOK = true
-                            break
-                        end
-                    end
-                    if not dependencyOK then
+                    if not craft(value.recipe, value.count).ok then
                         return false
                     end
-                    -- Remove TO HERE
                 end
             end
         end
@@ -247,6 +233,7 @@ end
 
 function craft(recipe, count)
     -- TODO check if count is not too high first ?
+    -- TODO Do this on server side ?
     -- Do items can have multiple in same slot ? if not max = 64 ?
 
     -- We have all dep, just craft
