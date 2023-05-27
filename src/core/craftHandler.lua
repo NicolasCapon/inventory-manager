@@ -64,7 +64,8 @@ local function addDependency(dependencies, recipe, count, lvl)
     return dependencies
 end
 
--- Check a recipe for missing materials and keep track of inventory lvl
+-- Check a recipe for missing materials and keep track of inventory lvl with
+-- var inventoryCount
 local function checkMaterials(recipe, count, inventoryCount, inventory)
     local toCraft = {} -- items unavailable in inventory
     for _, item in ipairs(recipe.items) do
@@ -134,6 +135,7 @@ end
 
 function CraftHandler:saveRecipe(recipe)
     -- Test if recipe already exists
+    recipe = removeExcessiveItems(recipe)
     if self.recipes[recipe.name] then
         for _, r in ipairs(self.recipes[recipe.name]) do
             if recipeIsSame(recipe, r) then
@@ -144,7 +146,6 @@ function CraftHandler:saveRecipe(recipe)
         end
     end
     -- Assume each recipe cannot contains more than one item per slot
-    recipe = removeExcessiveItems(recipe)
     local file = fs.open(config.RECIPES_FILE, "a")
     file.write(textutils.serialize(recipe, { compact = true }) .. "\n")
     file.close()
@@ -201,7 +202,9 @@ function CraftHandler:getAvailability(recipe,
     lvl = lvl + 1
     for key, value in pairs(toCraft) do
         local recipeToCraft = self.recipes[key]
+        -- local recipeToCraft = self.recipes[key] or {}
         if recipeToCraft ~= nil and not utils.itemInList(key, encountered) then
+        -- if not utils.itemInList(key, encountered) then
             table.insert(encountered, key)
             local recipeFound = false
             local request
@@ -225,7 +228,10 @@ function CraftHandler:getAvailability(recipe,
                 end
             end
             if not recipeFound then
-                -- No recipe available. Stop searching
+                -- No recipe available. Search in jobs
+                -- local jobsToDo = self.jobs[key] or {}
+                -- for _, job in ipairs(jobsToDo) do
+                --   getAvailability of this job and add it to dependencies
                 missing[key] = value
                 ok = false
             else
