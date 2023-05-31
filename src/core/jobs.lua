@@ -1,4 +1,3 @@
-local config = require("config")
 local utils = require("utils")
 
 local lib = {}

@@ -15,4 +15,10 @@ lib.ACCEPTED_TASKS = {"listenInventory", "keepMinItemInSlot"}
 lib.ALLOWED_INVENTORIES = {}
 lib.ALLOWED_INVENTORIES["metalbarrels:gold_tile"] = true
 
+lib.SERVER_ID = 6
+lib.TIMEOUT = 1
+
+lib.GET_SLOT = 1
+lib.CRAFTING_SLOT = 4
+
 return lib

@@ -1,5 +1,6 @@
-local config = require("config")
+local config = require("inventory-manager.src.config")
 
+-- Remove empty slots from inventory
 local function clearInventory(input)
     local n = #input
     for i = 1, n do
@@ -7,7 +8,6 @@ local function clearInventory(input)
             input[i] = nil
         end
     end
-
     local j = 0
     for i = 1, n do
         if input[i] ~= nil then
@@ -22,6 +22,7 @@ local function clearInventory(input)
     return input
 end
 
+-- create a unique identifier from given item based on name and nbt
 local function scanItem(item)
     if item.nbt then
         item.name = item.name .. "@" .. item.nbt
@@ -109,24 +110,48 @@ function InventoryHandler:scanAll()
     local scans = {}
     for i, remote in pairs(remotes) do
         if (config.ALLOWED_INVENTORIES[self.modem.getTypeRemote(remote)]
-            and self.ioChests[remote] == nil) then
+                and self.ioChests[remote] == nil) then
             self.inventoryChests[remote] = true
             table.insert(scans,
-                         function()
-                            self:scanRemoteInventory(remote, false)
-                         end)
+                function()
+                    self:scanRemoteInventory(remote, false)
+                end)
         end
     end
     parallel.waitForAll(table.unpack(scans))
 end
 
+-- Dump all items in given turtle to main inventory
+function InventoryHandler:dumpTurtle(dest)
+    local fns = {}
+    local turtle = peripheral.wrap(dest)
+    -- For each slot parallelize a job to put slot item into inventory
+    for i = 1, 16 do
+        local fn = function()
+            local item = turtle.getItemDetail(i, true)
+            if item ~= nil then
+                local request = self:put(item, dest, i)
+                if not request.ok then
+                    error(request.error)
+                end
+            end
+        end
+        table.insert(fns, fn)
+    end
+    local ok, err = pcall(parallel.waitForAll(table.unpack(fns)))
+    return { ok = ok, response = "dump", error = err }
+end
+
+-- Move X items from inventory to given destination
 function InventoryHandler:get(name, count, destination, slot)
     local item = self.inventory[name]
     if item == nil then
         local error = name .. " not found"
-        return { ok = false,
-                 response = { name = name, count = count },
-                 error = error }
+        return {
+            ok = false,
+            response = { name = name, count = count },
+            error = error
+        }
     else
         for i, location in ipairs(item) do
             local chest = location.chest
@@ -134,7 +159,7 @@ function InventoryHandler:get(name, count, destination, slot)
             local left = inventory_count - count
             if left > 0 then
                 -- Enough items in this slot
-                local ok, ret = pcall(self.modem.callRemote,
+                local _, ret = pcall(self.modem.callRemote,
                     chest,
                     "pushItems",
                     destination,
@@ -172,7 +197,7 @@ function InventoryHandler:get(name, count, destination, slot)
             else
                 -- not enough items get the maximum for this slot
                 -- and continue the loop
-                local ok, ret = pcall(self.modem.callRemote,
+                local _, ret = pcall(self.modem.callRemote,
                     chest,
                     "pushItems",
                     destination,
@@ -195,18 +220,23 @@ function InventoryHandler:get(name, count, destination, slot)
         self.inventory[name] = clearInventory(self.inventory[name])
         if count > 0 then
             local error = "Not enough item " .. name ..
-                          " or place for it, missing " .. count
-            return { ok = false,
-                     response = { name = name, count = count },
-                     error = error }
+                " or place for it, missing " .. count
+            return {
+                ok = false,
+                response = { name = name, count = count },
+                error = error
+            }
         else
-            return { ok = true,
-                     response = { name = name, count = count },
-                     error = "" }
+            return {
+                ok = true,
+                response = { name = name, count = count },
+                error = ""
+            }
         end
     end
 end
 
+-- Put item in from destination to main inventory free slot
 function InventoryHandler:put_in_free_slot(item, count, destination, slot)
     local name = item.name
     local maxCount = item.maxCount or 64
@@ -222,22 +252,24 @@ function InventoryHandler:put_in_free_slot(item, count, destination, slot)
         if left > -1 then
             -- put does not exceed item limit for this free slot
             local ok, ret = pcall(self.modem.callRemote,
-                                  fslot.chest,
-                                  "pullItems",
-                                  destination,
-                                  slot,
-                                  count,
-                                  fslot.slot.index)
+                fslot.chest,
+                "pullItems",
+                destination,
+                slot,
+                count,
+                fslot.slot.index)
             if not ok then
                 -- if error occurs, clean free and stop
                 self.free = clearInventory(self.free) or {}
                 return {
                     ok = false,
-                    response = { name = name,
-                                 count = count,
-                                 maxCount = maxCount,
-                                 destination = destination,
-                                 slot = slot },
+                    response = {
+                        name = name,
+                        count = count,
+                        maxCount = maxCount,
+                        destination = destination,
+                        slot = slot
+                    },
                     error = ret
                 }
             end
@@ -257,22 +289,24 @@ function InventoryHandler:put_in_free_slot(item, count, destination, slot)
         else
             -- put exceed slot limit, put max and continue loop
             local ok, ret = pcall(self.modem.callRemote,
-                                  chest,
-                                  "pullItems",
-                                  destination,
-                                  slot,
-                                  limit,
-                                  fslot.slot.index)
+                chest,
+                "pullItems",
+                destination,
+                slot,
+                limit,
+                fslot.slot.index)
             if not ok then
                 -- if error occurs, clean free and stop
                 self.free = clearInventory(self.free) or {}
                 return {
                     ok = false,
-                    response = { name = name,
-                                 count = count,
-                                 maxCount = maxCount,
-                                 destination = destination,
-                                 slot = slot },
+                    response = {
+                        name = name,
+                        count = count,
+                        maxCount = maxCount,
+                        destination = destination,
+                        slot = slot
+                    },
                     error = ret
                 }
             end
@@ -317,6 +351,7 @@ function InventoryHandler:put_in_free_slot(item, count, destination, slot)
     end
 end
 
+-- Put item from destination slot to main inventory
 function InventoryHandler:put(item, dest, slot)
     local name = item.name
     local count = item.count

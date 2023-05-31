@@ -1,4 +1,4 @@
-local config = require("config")
+local config = require("inventory-manager.src.config")
 local utils = require("utils")
 local jobsLib = require("jobs")
 
@@ -26,6 +26,7 @@ function JobHandler:new(inventory, scheduler)
     return o
 end
 
+-- Add cron job to scheduler to be executed periodically
 function JobHandler:addToScheduler(job)
     local tasks = {
         listenInventory = jobsLib.listenInventory,
@@ -45,6 +46,8 @@ function JobHandler:addToScheduler(job)
     end
 end
 
+-- Remove job from list and scheduler
+-- TODO rewrite serialized file
 function JobHandler:removeJob(job)
     if job.type == "cron" then
         self.scheduler:removeTasksByName(job.name)
@@ -57,6 +60,7 @@ function JobHandler:removeJob(job)
     }
 end
 
+-- Load all jobs from serialized file
 function JobHandler:loadJobs()
     -- Add to scheduler all cron and List chests used by jobs to avoid using
     -- them on scanAll
@@ -72,6 +76,7 @@ function JobHandler:loadJobs()
     end
 end
 
+-- Add job to job list if not already registered
 function JobHandler:addJob(job)
     local response
     if not self.jobs[job.type][job.name] then

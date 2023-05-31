@@ -1,4 +1,4 @@
-local Scheduler = {tasks = {}}
+local Scheduler = { tasks = {} }
 
 function Scheduler:new(obj, tasks)
     obj = obj or {}
@@ -12,8 +12,10 @@ function Scheduler:addTask(task, name)
     if type(task) ~= "function" then
         error("bad argument, function expected, got " .. type(task) .. ")", 3)
     else
-        table.insert(self.tasks, {name=name,
-                                  routine=coroutine.create(task)})
+        table.insert(self.tasks, {
+            name = name,
+            routine = coroutine.create(task)
+        })
         os.queueEvent("new task")
         return true
     end
@@ -39,8 +41,13 @@ function Scheduler:run()
         for n = 1, count do
             local r = self.tasks[n].routine
             if r then
-                if tFilters[r] == nil or tFilters[r] == eventData[1] or eventData[1] == "terminate" then
-                    local ok, param = coroutine.resume(r, table.unpack(eventData, 1, eventData.n))
+                if tFilters[r] == nil
+                    or tFilters[r] == eventData[1]
+                    or eventData[1] == "terminate" then
+                    local ok, param = coroutine.resume(r,
+                        table.unpack(eventData,
+                            1,
+                            eventData.n))
                     if not ok then
                         error(param, 0)
                     else

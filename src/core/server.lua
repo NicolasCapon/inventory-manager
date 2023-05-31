@@ -1,4 +1,4 @@
-local config = require("config")
+local config = require("inventory-manager.src.config")
 local Scheduler = require("scheduler")
 local Inventory = require("inventory")
 local JobHandler = require("jobHandler")
@@ -79,6 +79,8 @@ local function decodeMessage(message, client)
     local response
     if message.endpoint == "get" then
         response = inventory:get(message.item, message.count, message.from, message.slot)
+    elseif message.endpoint == "put" then
+        response = inventory:put(message.item, message.from, message.slot)
     elseif message.endpoint == "info" then
         progressBar("DU")
         response = { ok = true, response = inventory.inventory }
@@ -98,14 +100,8 @@ local function decodeMessage(message, client)
         response = { ok = true, response = inventory.inventoryChests }
     elseif message.endpoint == "satelliteChests" then
         response = { ok = true, response = inventory:listSatelliteChests() }
-    elseif message.endpoint == "put" then
-        response = inventory:put(message.item, message.from, message.slot)
     elseif message.endpoint == "recipes" then
         response = { ok = true, response = craftHandler.recipes }
-    elseif message.endpoint == "make" then
-        response = craftHandler:getAvailability(message.recipe, message.count)
-    elseif message.endpoint == "add" then
-        response = craftHandler:saveRecipe(message.recipe)
     elseif message.endpoint == "jobs" then
         response = { ok = true, response = jobHandler.jobs.unit }
     elseif message.endpoint == "cronjobs" then
@@ -118,6 +114,17 @@ local function decodeMessage(message, client)
         response = jobHandler:execJob(message.job, message.params, message.count)
     elseif message.endpoint == "updateClients" then
         response = updateClients()
+    elseif message.endpoint == "getOrCraft" then
+        response = craftHandler:getOrCraft(message.item, message.count, message.from)
+        updateClients()
+    elseif message.endpoint == "craftRecursive" then
+        response = craftHandler:craftRecursive(message.item, message.count, message.from)
+        updateClients()
+    elseif message.endpoint == "craftAndLearn" then
+        response = craftHandler:craftAndLearn(message.from)
+    elseif message.endpoint == "dumpTurtle" then
+        response = inventory:dumpTurtle(message.from)
+        updateClients()
     end
     local ok, err = pcall(sendResponse, client, response)
     if not ok then print(err) end
