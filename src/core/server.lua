@@ -1,6 +1,6 @@
 local config = require("inventory-manager.src.config")
 local Scheduler = require("scheduler")
-local Inventory = require("inventory")
+local InventoryHandler = require("inventoryHandler")
 local JobHandler = require("jobHandler")
 local CraftHandler = require("craftHandler")
 
@@ -11,11 +11,11 @@ peripheral.find("modem", rednet.open)
 
 -- Initialize modules
 local scheduler = Scheduler:new()
-local inventory = Inventory:new(modem)
-inventory:scanAll()
-local jobHandler = JobHandler:new(inventory, scheduler)
+local inventoryHandler = InventoryHandler:new(modem)
+inventoryHandler:scanAll()
+local jobHandler = JobHandler:new(inventoryHandler, scheduler)
 jobHandler:loadJobs()
-local craftHandler = CraftHandler:new(inventory)
+local craftHandler = CraftHandler:new(inventoryHandler)
 
 -- Helper function for sending response to client
 local function sendResponse(client, response)
@@ -34,7 +34,7 @@ end
 -- Notify all client about inventory changes
 local function updateClients()
     local message = {
-        inventory = inventory.inventory,
+        inventory = inventoryHandler.inventory,
         recipes = craftHandler.recipes,
         jobs = jobHandler.jobs.unit,
         acceptedTasks = config.ACCEPTED_TASKS,
@@ -46,7 +46,7 @@ end
 -- Get number of used slots in inventory
 local function getInventorySlotsNumber()
     local total = 0
-    for _, value in pairs(inventory.inventory) do
+    for _, value in pairs(inventoryHandler.inventory) do
         total = total + #value
     end
     return total
@@ -56,7 +56,7 @@ end
 local function progressBar(text)
     monitor.clear()
     local current = getInventorySlotsNumber()
-    local free = inventory.free
+    local free = inventoryHandler.free
     local max = current + #free
     local x, _ = monitor.getSize()
     local ratio = (current * x) / max
@@ -78,18 +78,18 @@ end
 local function decodeMessage(message, client)
     local response
     if message.endpoint == "get" then
-        response = inventory:get(message.item, message.count, message.from, message.slot)
+        response = inventoryHandler:get(message.item, message.count, message.from, message.slot)
     elseif message.endpoint == "put" then
-        response = inventory:put(message.item, message.from, message.slot)
+        response = inventoryHandler:put(message.item, message.from, message.slot)
     elseif message.endpoint == "info" then
         progressBar("DU")
-        response = { ok = true, response = inventory.inventory }
+        response = { ok = true, response = inventoryHandler.inventory }
     elseif message.endpoint == "all" then
         progressBar("DU")
         response = {
             ok = true,
             response = {
-                inventory = inventory.inventory,
+                inventory = inventoryHandler.inventory,
                 recipes = craftHandler.recipes,
                 jobs = jobHandler.jobs.unit,
                 acceptedTasks = config.ACCEPTED_TASKS,
@@ -97,9 +97,9 @@ local function decodeMessage(message, client)
             }
         }
     elseif message.endpoint == "inventoryChests" then
-        response = { ok = true, response = inventory.inventoryChests }
+        response = { ok = true, response = inventoryHandler.inventoryChests }
     elseif message.endpoint == "satelliteChests" then
-        response = { ok = true, response = inventory:listSatelliteChests() }
+        response = { ok = true, response = inventoryHandler:listSatelliteChests() }
     elseif message.endpoint == "recipes" then
         response = { ok = true, response = craftHandler.recipes }
     elseif message.endpoint == "jobs" then
@@ -123,7 +123,7 @@ local function decodeMessage(message, client)
     elseif message.endpoint == "craftAndLearn" then
         response = craftHandler:craftAndLearn(message.from)
     elseif message.endpoint == "dumpTurtle" then
-        response = inventory:dumpTurtle(message.from)
+        response = inventoryHandler:dumpTurtle(message.from)
         updateClients()
     end
     local ok, err = pcall(sendResponse, client, response)

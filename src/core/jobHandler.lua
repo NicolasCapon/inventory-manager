@@ -16,11 +16,11 @@ local JobHandler = {}
 JobHandler.__index = JobHandler
 
 -- JobHandler constructor
-function JobHandler:new(inventory, scheduler)
+function JobHandler:new(inventoryHandler, scheduler)
     local o = {}
     setmetatable(o, JobHandler)
-    o.inventory = inventory
-    o.ioChests = inventory.ioChests
+    o.inventoryHandler = inventoryHandler
+    o.ioChests = inventoryHandler.ioChests
     o.scheduler = scheduler
     o.jobs = loadJobsFromFile(config.JOBS_FILE)
     return o
@@ -34,7 +34,7 @@ function JobHandler:addToScheduler(job)
     }
     for _, task in ipairs(job.tasks) do
         if utils.itemInList(task.exec, config.ACCEPTED_TASKS) then
-            task.params.inventory = self.inventory
+            task.params.inventoryHandler = self.inventoryHandler
             local fn = function()
                 while true do
                     tasks[task.exec](task.params)
@@ -120,7 +120,7 @@ function JobHandler:execJob(name, liveParams, n)
         -- Apply multiplier if we need to execJob n times (default=1)
         p.count = tonumber(p.count) or 1
         p.count = p.count * n
-        p.inventory = self.inventory
+        p.inventoryHandler = self.inventoryHandler
         if task.exec == "sendItemToInventory" then
             local request = jobsLib.sendItemToInventory(p)
             if request and not request.ok then

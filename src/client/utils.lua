@@ -26,15 +26,4 @@ function lib.getItemCount(item)
     return total
 end
 
--- TODO remove ?
-function lib.checkForEmptySlots()
-    for i = 1, 16 do
-        if turtle.getItemDetail(i) ~= nil then
-            lib.log("Remove items in turtle inventory first (use command dump)")
-            return false
-        end
-    end
-    return true
-end
-
 return lib

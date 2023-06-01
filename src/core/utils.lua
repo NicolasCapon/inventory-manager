@@ -25,8 +25,8 @@ function lib.readFile(path)
     return content
 end
 
-
 -- Send notifications to all clients for updating UI
+-- TODO merge with server.lua updateClients
 function lib.updateClients()
     local msg = { endpoint = "updateClients" }
     rednet.send(6, msg, config.PROTOCOLS.MAIN)

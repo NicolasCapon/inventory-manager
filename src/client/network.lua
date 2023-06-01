@@ -28,10 +28,4 @@ function NetworkHandler:sendMessage(msg, ignoreErrors)
     return response
 end
 
--- Notify all clients that we update inventory
-function NetworkHandler:broadcastUpdate()
-    local msg = { endpoint = "updateClients" }
-    self.sendMessage(msg, self.modem)
-end
-
 return NetworkHandler

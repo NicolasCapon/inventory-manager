@@ -45,10 +45,10 @@ function InventoryHandler:new(modem)
     return o
 end
 
+-- satelliteChests are for importing/exporting items in the core inventory
+-- They are mainly used by jobs
+-- Call this method only after scanAll first call
 function InventoryHandler:listSatelliteChests()
-    -- satelliteChests are for importing/exporting items in the core inventory
-    -- They are mainly used by jobs
-    -- Call this method only after scanAll first call
     local satelliteChests = {}
     for _, remote in ipairs(self.modem.getNamesRemote()) do
         if not self.inventoryChests[remote] then
@@ -58,8 +58,8 @@ function InventoryHandler:listSatelliteChests()
     return satelliteChests
 end
 
+-- scan remote inventory and populate global inventory
 function InventoryHandler:scanRemoteInventory(remote, variableLimit)
-    -- scan remote inventory and populate global inventory
     if variableLimit == nil then variableLimit = false end
     local chest = peripheral.wrap(remote)
     for cslot = 1, chest.size() do
@@ -104,8 +104,9 @@ function InventoryHandler:scanRemoteInventory(remote, variableLimit)
     end
 end
 
+-- Scann all autorised chests (see config) and populate inventory
+-- TODO add option to fine tune chest selection
 function InventoryHandler:scanAll()
-    -- Populate inventory
     local remotes = self.modem.getNamesRemote()
     local scans = {}
     for i, remote in pairs(remotes) do

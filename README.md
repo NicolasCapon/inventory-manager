@@ -37,9 +37,8 @@ TODO
 - [ ] Handle items with nbt
   - [ ] Modify UI (button 1x1 on right, info frame x=4 on bottom)
   - [ ] Add keyCombo over items (Ctrl+key) for frequent job like smelting
-- [ ] add pocket computer support for calling jobs remotely and admin server
+- [ ] add administration tools (TUI or GUI) for add/remove jobs, chests, recipes
+  - [ ] add pocket computer support for calling jobs remotely and admin server
 - [x] Clean code by segmenting it
-- [ ] Handle when user ask too many crafts (log + threshold):
-  - Calculate max we can craft ?
-  - cut crafts by chunck ?
+- [ ] test craft handler if we request more than 64 items
 - [ ] Add installation doc (and script ?)
