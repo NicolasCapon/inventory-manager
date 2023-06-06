@@ -1,3 +1,4 @@
+package.path = package.path .. ';../?.lua'
 local gui = require("gui")
 
 local clientGUI = gui:new()

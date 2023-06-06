@@ -1,4 +1,5 @@
-local config = require("inventory-manager.src.config")
+package.path = package.path .. ';../?.lua'
+local config = require("config")
 local Scheduler = require("scheduler")
 local InventoryHandler = require("inventoryHandler")
 local JobHandler = require("jobHandler")
@@ -15,7 +16,7 @@ local inventoryHandler = InventoryHandler:new(modem)
 inventoryHandler:scanAll()
 local jobHandler = JobHandler:new(inventoryHandler, scheduler)
 jobHandler:loadJobs()
-local craftHandler = CraftHandler:new(inventoryHandler)
+local craftHandler = CraftHandler:new(inventoryHandler, modem)
 
 -- Helper function for sending response to client
 local function sendResponse(client, response)
@@ -102,6 +103,11 @@ local function decodeMessage(message, client)
         response = { ok = true, response = inventoryHandler:listSatelliteChests() }
     elseif message.endpoint == "recipes" then
         response = { ok = true, response = craftHandler.recipes }
+    elseif message.endpoint == "learnRecipe" then
+        response = craftHandler:saveRecipe(message.recipe)
+        updateClients()
+    elseif message.endpoint == "available" then
+        response = craftHandler:getAvailability(message.recipe, message.count)
     elseif message.endpoint == "jobs" then
         response = { ok = true, response = jobHandler.jobs.unit }
     elseif message.endpoint == "cronjobs" then

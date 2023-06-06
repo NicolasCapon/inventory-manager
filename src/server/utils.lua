@@ -1,4 +1,4 @@
-local config = require("inventory-manager.src.config")
+local config = require("config")
 
 local lib = {}
 
@@ -56,6 +56,15 @@ function lib.copy(obj)
     local res = {}
     for k, v in pairs(obj) do res[lib.copy(k)] = lib.copy(v) end
     return res
+end
+
+-- TODO merge with server utils
+function lib.getItemCount(item)
+    local total = 0
+    for _, s in ipairs(item) do
+        total = total + s.slot.count
+    end
+    return total
 end
 
 return lib

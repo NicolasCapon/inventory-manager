@@ -1,4 +1,4 @@
-local config = require("inventory-manager.src.config")
+local config = require("config")
 local utils = require("utils")
 local jobsLib = require("jobs")
 

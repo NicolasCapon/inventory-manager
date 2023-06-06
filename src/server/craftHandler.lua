@@ -1,4 +1,4 @@
-local config = require("inventory-manager.src.config")
+local config = require("config")
 local utils = require("utils")
 
 local CraftHandler = {}
@@ -112,7 +112,6 @@ local function recipeIsSame(rec1, rec2)
         -- If rec1 and rec2 have same output, compare inputs
         local totalRec1 = getItemCount(rec1)
         local totalRec2 = getItemCount(rec2)
-
         for item, count in pairs(totalRec1) do
             if totalRec2[item] then
                 if totalRec2[item] ~= count then
@@ -125,166 +124,16 @@ local function recipeIsSame(rec1, rec2)
 end
 
 -- CraftHandler constructor
-function CraftHandler:new(inventoryHandler)
+function CraftHandler:new(inventoryHandler, modem)
     local o = {}
     setmetatable(o, CraftHandler)
+    o.modem = modem
     o.recipes, o.idCount = loadRecipes()
     o.inventoryHandler = inventoryHandler
     o.inventory = inventoryHandler.inventory
-    return o
+return o
 end
 
--- Get given item to destination, if not enough items are available, try to
--- craft them
-function CraftHandler:getOrCraft(name, count, dest)
-    local turtle = peripheral.wrap(dest)
-    turtle.select(config.GET_SLOT)
-    local maxCount = getItemCount(self.inventory[name])
-    if count > maxCount then
-        -- if we need more than what's in inventoru, try to craft first if there
-        -- is a recipe for this item
-        local recipeCount = count - maxCount
-        if recipeCount > 64 then
-            -- Cap the max to 64
-            recipeCount = 64
-        end
-        if self.recipes[name] then
-            if not self:craftRecursive(name, recipeCount, dest) then
-                -- If we cannot craft then only give what's in inventory
-                count = maxCount
-            else
-                self.inventoryHandler:dumpTurtle(dest)
-            end
-        else
-            -- No recipe for this item, only give what's in inventory
-            count = maxCount
-        end
-    end
-    return self.inventoryHandler:get(name, count, dest)
-end
-
--- Craft a recipe given by its name X times on given crafty turtle
--- Handle inner crafts
-function CraftHandler:craftRecursive(name, count, dest)
-    local givenRecipes = self.recipes[name]
-    if not givenRecipes then
-        local err = "Recipe not found: " .. name
-        return { ok = false, response = "craft", error = err }
-    end
-    local foundRecipe
-    local dependencies
-    local missing = {}
-    -- Find first recipe available
-    for _, recipe in ipairs(givenRecipes) do
-        -- For recipe producing more than one, adjust count to avoid overproducing
-        count = math.ceil(count / recipe.count)
-        local req = self:getAvailability(recipe, count)
-        if req.ok then
-            foundRecipe = recipe
-            dependencies = req.response.dependencies
-            break
-        else
-            table.insert(missing, req.error)
-        end
-    end
-    if not foundRecipe then
-        local err = "Missing items: (click)\n" .. textutils.serialize(missing)
-        return { ok = false, response = name, error = err }
-    end
-    -- For the found recipe, use dependencies tree to craft smartly
-    local deplvl = dependencies["maxlvl"]
-    while deplvl > 0 do
-        for dependency, value in pairs(dependencies) do
-            -- Avoid maxlvl entry
-            if dependency ~= "maxlvl" then
-                if value.lvl == deplvl then
-                    local req = self:craft(value.recipe, value.count, dest)
-                    if not req.ok then
-                        return req
-                    end
-                end
-            end
-        end
-        deplvl = deplvl - 1
-    end
-    -- finally craft the requested recipe
-    local req = self:craft(foundRecipe, count, dest)
-    -- broadcastUpdate(modem)
-    return req
-end
-
-function CraftHandler:craft(recipe, count, destination)
-    -- Make room first
-    local request = self.inventoryHandler.dumpTurtle(destination)
-    if not request.ok then
-        return request
-    end
-    -- Get all items
-    -- TODO use coroutines
-    local turtle = peripheral.wrap(destination)
-    local fns = {}
-    -- For speed purpose, construct table for executing get in parallel
-    for _, item in ipairs(recipe.items) do
-        local fn = function()
-            turtle.select(item.slot)
-            local total = item.count * count
-            local slot = turtle.getSelectedSlot()
-            local req = self.inventoryHandler.get(item.name, total, destination, slot)
-            if not req.ok then
-                error(req.error)
-            end
-        end
-        table.insert(fns, fn)
-    end
-    local ok, err = pcall(parallel.waitForAll(table.unpack(fns)))
-    if not ok then
-        return { ok = ok, response = recipe, error = err }
-    end
-    -- Some items are not consumed after craft, move crafting result slot to
-    -- an unused slot
-    turtle.select(config.CRAFTING_SLOT)
-    if not turtle.craft(count) then
-        error = "error while crafting " .. recipe.name
-        utils.log(error, true)
-        return { ok = false, response = recipe, error = error }
-    end
-    return { ok = true, response = recipe, error = error }
-end
-
-function CraftHandler:craftAndLearn(dest)
-    local turtle = peripheral.wrap(dest)
-    local recipe = { items = {}, type = "crafting_table" }
-    local fns = {}
-    -- For speed purpose, construct table with functions to scan turtle
-    -- crafting grid in parallel
-    for i = 1, 16 do
-        local fn = function()
-            local item = turtle.getItemDetail(i)
-            if item ~= nil then
-                table.insert(recipe.items, { slot = i,
-                                             name = item.name,
-                                             count = item.count })
-            end
-        end
-        table.insert(fns, fn)
-    end
-    local ok, err = pcall(parallel.waitForAll(table.unpack(fns)))
-    if not ok then
-        return { ok = ok, response = "craft&learn", error = err }
-    end
-    turtle.select(config.CRAFTING_SLOT)
-    if #recipe.items > 0 and turtle.craft() then
-        local item = turtle.getItemDetail(config.CRAFTING_SLOT)
-        if item then
-            recipe.name = item.name
-            recipe.count = item.count
-        end
-        return self:saveRecipe(recipe)
-    else
-        local err = "Invalid recipe"
-        return { ok = false, response = "craft&learn", error = err}
-    end
-end
 
 function CraftHandler:saveRecipe(recipe)
     -- Test if recipe already exists
@@ -298,7 +147,8 @@ function CraftHandler:saveRecipe(recipe)
             end
         end
     end
-    -- Assume each recipe cannot contains more than one item per slot
+    recipe.id = self.idCount
+    self.idCount = self.idCount + 1
     local file = fs.open(config.RECIPES_FILE, "a")
     file.write(textutils.serialize(recipe, { compact = true }) .. "\n")
     file.close()
@@ -307,21 +157,6 @@ function CraftHandler:saveRecipe(recipe)
     end
     table.insert(self.recipes[recipe.name], recipe)
     return { ok = true, response = recipe, error = "" }
-end
-
-function CraftHandler:createRecipe(name, turtleID)
-    -- create recipe from turtle inventory and serialize it to file
-    local turtle = peripheral.wrap(turtleID)
-    local recipe = { name = name, items = {}, id = self.idCount }
-    self.idCount = self.idCount + 1
-    for i = 1, 16 do
-        local item = turtle.getItemDetail(i)
-        if item ~= nil then
-            table.insert(recipe["items"],
-                { slot = i, name = item.name, count = item.count })
-        end
-    end
-    self:saveRecipe(recipe)
 end
 
 -- Get if recipe can be crafted with current state of the inventory

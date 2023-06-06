@@ -1,4 +1,4 @@
-local config = require("inventory-manager.src.config")
+local config = require("config")
 
 -- Remove empty slots from inventory
 local function clearInventory(input)
@@ -120,27 +120,6 @@ function InventoryHandler:scanAll()
         end
     end
     parallel.waitForAll(table.unpack(scans))
-end
-
--- Dump all items in given turtle to main inventory
-function InventoryHandler:dumpTurtle(dest)
-    local fns = {}
-    local turtle = peripheral.wrap(dest)
-    -- For each slot parallelize a job to put slot item into inventory
-    for i = 1, 16 do
-        local fn = function()
-            local item = turtle.getItemDetail(i, true)
-            if item ~= nil then
-                local request = self:put(item, dest, i)
-                if not request.ok then
-                    error(request.error)
-                end
-            end
-        end
-        table.insert(fns, fn)
-    end
-    local ok, err = pcall(parallel.waitForAll(table.unpack(fns)))
-    return { ok = ok, response = "dump", error = err }
 end
 
 -- Move X items from inventory to given destination

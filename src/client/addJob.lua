@@ -1,5 +1,5 @@
 local completion = require "cc.completion"
-local config = require("inventory-manager.src.config")
+local config = require("config")
 
 local SERVER = config.SERVER_ID
 local PROTOCOL = config.PROTOCOLS.MAIN
