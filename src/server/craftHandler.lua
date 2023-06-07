@@ -46,8 +46,11 @@ local function countItem(item, inventory)
     return total
 end
 
+-- Add recipe lvl of dependencies and item count
 local function addDependency(dependencies, recipe, count, lvl)
-    -- add recipe lvl of dependencies and item count
+    -- TODO for jobs: add type key (craft|job) for each dependency
+    -- use type_id as key for dependencies table
+    -- modify client craftRecursive function accordingly
     if dependencies["maxlvl"] < lvl then
         -- lvl up max lvl of dependencies if necessary
         dependencies["maxlvl"] = lvl
@@ -171,7 +174,7 @@ function CraftHandler:getAvailability(recipe,
                                       encountered)
     -- Keep track of encountered recipe to avoid infinite recursion
     encountered = encountered or {}
-    table.insert(encountered, recipe.name)
+    encountered[recipe.name] = true
     -- get recipe dependencies for crafting in the right order
     dependencies = dependencies or { maxlvl = 0 }
     -- lvl is the lvl of recursion for this recipe
@@ -188,21 +191,18 @@ function CraftHandler:getAvailability(recipe,
         inventoryCount,
         self.inventory)
     lvl = lvl + 1
-    for key, value in pairs(toCraft) do
-        local recipeToCraft = self.recipes[key]
-        -- local recipeToCraft = self.recipes[key] or {}
-        if recipeToCraft ~= nil and not utils.itemInList(key, encountered) then
-        -- if not utils.itemInList(key, encountered) then
-            table.insert(encountered, key)
+    for name, rCount in pairs(toCraft) do
+        local recipeToCraft = self.recipes[name]
+        if recipeToCraft ~= nil and not encountered[name] then
+            encountered[name] = true
             local recipeFound = false
             local request
             for _, rec in ipairs(recipeToCraft) do
-                table.insert(encountered, rec.name)
                 -- if recipe produce more than one item, adjust number to craft
-                value = math.ceil(value / rec.count) -- round up
+                rCount = math.ceil(rCount / rec.count) -- round up
                 -- Recurse this function
                 request = self:getAvailability(rec,
-                    value,
+                    rCount,
                     dependencies,
                     lvl,
                     inventoryCount,
@@ -216,11 +216,12 @@ function CraftHandler:getAvailability(recipe,
                 end
             end
             if not recipeFound then
+                -- TODO
                 -- No recipe available. Search in jobs
-                -- local jobsToDo = self.jobs[key] or {}
+                -- local jobsToDo = self.jobs[name] or {}
                 -- for _, job in ipairs(jobsToDo) do
                 --   getAvailability of this job and add it to dependencies
-                missing[key] = value
+                missing[name] = rCount
                 ok = false
             else
                 -- update recursive values
@@ -228,17 +229,17 @@ function CraftHandler:getAvailability(recipe,
                 missing = request.response.missing
                 dependencies = addDependency(request.response.dependencies,
                     recipeFound,
-                    value,
+                    rCount,
                     lvl)
             end
         else
             -- Item is raw material without enough quantity or
             -- we dont have a recipe for it. Throw error
             ok = false
-            if not missing[key] then
-                missing[key] = value
+            if not missing[name] then
+                missing[name] = rCount
             else
-                missing[key] = missing[key] + value
+                missing[name] = missing[name] + rCount
             end
         end
     end
