@@ -31,7 +31,7 @@ TODO
 
 ## TODO
 
-- [x] When server is up it should notify all client.
+- [ ] update basalt version
 - [ ] new job should rescan for new chest since server startup
 - [ ] add job dependency ? (add output/input to job for chaining them)
 - [ ] Handle items with nbt
@@ -39,6 +39,4 @@ TODO
   - [ ] Add keyCombo over items (Ctrl+key) for frequent job like smelting
 - [ ] add administration tools (TUI or GUI) for add/remove jobs, chests, recipes
   - [ ] add pocket computer support for calling jobs remotely and admin server
-- [x] Clean code by segmenting it
-- [ ] test craft handler if we request more than 64 items
 - [ ] Add installation doc (and script ?)
