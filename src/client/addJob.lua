@@ -1,22 +1,15 @@
 local completion = require "cc.completion"
-local modem = peripheral.find("modem") or error("No modem attached", 0)
-peripheral.find("modem", rednet.open)
+package.path = package.path .. ';../?.lua'
+local config = require("config")
 
-local SERVER = 6
-local PROTOCOL = "INVENTORY"
-local TIMEOUT = 5
+local SERVER = config.SERVER_ID
+local PROTOCOL = config.PROTOCOLS.MAIN
+local TIMEOUT = config.TIMEOUT
 
-function execJob(job, count)
-    local message = {endpoint="execJob", job=job, count=count}
+local function addJob(job)
+    local message = { endpoint = "addJob", job = job }
     rednet.send(SERVER, message, PROTOCOL)
-    local id, response = rednet.receive(PROTOCOL, TIMEOUT)
-    return response or { ok = false, error = "server unreachable" }
-end
-
-function addJob(job)
-    local message = {endpoint="addJob", job=job}
-    rednet.send(SERVER, message, PROTOCOL)
-    local id, response = rednet.receive(PROTOCOL, TIMEOUT)
+    local _, response = rednet.receive(PROTOCOL, TIMEOUT)
     return response or { ok = false, error = "server unreachable" }
 end
 
@@ -28,20 +21,20 @@ end
 -- a CRON declaration
 -- cron = {name="minecraft:chest_13", task="listenInventory"}
 
-function listUnusedChests()
+local function listUnusedChests()
     local unusedChests = {}
-    local message = {endpoint="satelliteChests"}
+    local message = { endpoint = "satelliteChests" }
     rednet.send(SERVER, message, PROTOCOL)
-    local id, response = rednet.receive(PROTOCOL, TIMEOUT)
+    local _, response = rednet.receive(PROTOCOL, TIMEOUT)
     if response.ok then
-        for chest, value in pairs(response.response) do
+        for chest, _ in pairs(response.response) do
             table.insert(unusedChests, chest)
         end
     end
     return unusedChests
 end
 
-function writeColor(text, col)
+local function writeColor(text, col)
     col = col or colors.yellow
     old_color = term.getTextColor()
     term.setTextColor(col)
@@ -49,10 +42,10 @@ function writeColor(text, col)
     term.setTextColor(old_color)
 end
 
-function getServerInfos()
-    local message = {endpoint="all"}
+local function getServerInfos()
+    local message = { endpoint = "all" }
     rednet.send(SERVER, message, PROTOCOL)
-    local id, response = rednet.receive(PROTOCOL, TIMEOUT)
+    local _, response = rednet.receive(PROTOCOL, TIMEOUT)
     if response.ok then
         return response.response
     end
@@ -64,14 +57,14 @@ local itemsName = {}
 for key, _ in pairs(infos.inventory) do
     table.insert(itemsName, key)
 end
-local existingJobs = {unit=infos.jobs, cron=infos.cron}
+local existingJobs = { unit = infos.jobs, cron = infos.cron }
 local acceptedCronTasks = infos.acceptedTasks
 
-function readCronTask()
+local function readCronTask()
     writeColor("Choose type of task for this job (use arrow keys)\n")
-    local cronTask = read(nil, nil, function(text) 
-                            return completion.choice(text, acceptedCronTasks)
-                            end)
+    local cronTask = read(nil, nil, function(text)
+        return completion.choice(text, acceptedCronTasks)
+    end)
     for _, c in ipairs(acceptedCronTasks) do
         if cronTask == c then
             return cronTask
@@ -80,9 +73,11 @@ function readCronTask()
     return readCronTask()
 end
 
-function readInventory()
+local function readInventory()
     writeColor("choose inventory to apply this\n")
-    local inv = read(nil, nil, function(text) return completion.choice(text, unusedChests) end)
+    local inv = read(nil, nil, function(text)
+        return completion.choice(text, unusedChests)
+    end)
     local status = false
     if inv == "*" then
         status = true
@@ -101,10 +96,10 @@ function readInventory()
     return inv
 end
 
-function readItemName()
+local function readItemName()
     writeColor("Choose item name\n")
     local it = read(nil, nil, function(text) return completion.choice(text, itemsName) end)
-    status = false
+    local status = false
     if it == "*" then
         status = true
     else
@@ -122,32 +117,32 @@ function readItemName()
     return it
 end
 
-function readCount()
+local function readCount()
     writeColor("Choose quantity to move (default=1)\n")
     local count = read(nil, nil, nil, "1")
     return tonumber(count) or "*"
 end
 
-function readMin()
+local function readMin()
     writeColor("Choose min quantity to keep (default=1)\n")
     local count = read(nil, nil, nil, "1")
     return tonumber(count) or 1
 end
 
-function readFrequency()
+local function readFrequency()
     writeColor("Choose job frequency (default=10)\n")
     local count = read(nil, nil, nil, "10")
     return tonumber(count) or 10
 end
 
-function readSlot(default)
+local function readSlot(default)
     defaultstr = default or "nil"
-    writeColor("Choose slot on chest (default=".. defaultstr ..")\n")
+    writeColor("Choose slot on chest (default=" .. defaultstr .. ")\n")
     local count = read(nil, nil, nil, default)
     return tonumber(count) or default
 end
 
-function readJobName()
+local function readJobName()
     writeColor("Choose name for this job:\n")
     local name = read()
     if name == "" or existingJobs.cron[name] or existingJobs.unit[name] then
@@ -157,29 +152,27 @@ function readJobName()
     return name
 end
 
-
-
-function addTask(tasklist)
+local function addTask(tasklist)
     writeColor("Choosing option for task number" .. #tasklist + 1 .. " ...\n", colors.green)
     local item = readItemName()
     local location = readInventory()
     local count = readCount()
     local slot = readSlot("1")
     if (item and location) then
-        local params = {item=item, count=count, location=location, slot=slot}
-        table.insert(tasklist, {exec="sendItemToInventory", params=params}) 
+        local params = { item = item, count = count, location = location, slot = slot }
+        table.insert(tasklist, { exec = "sendItemToInventory", params = params })
         return true
     end
 end
 
 writeColor("Type of job to add: cron/regular\n> ")
-local jobtype = read(nil, nil, function(text) return completion.choice(text, {"regular", "cron"}) end)
+local jobtype = read(nil, nil, function(text) return completion.choice(text, { "regular", "cron" }) end)
 if jobtype ~= "cron" then jobtype = "regular" end
 
 if jobtype == "regular" then
     -- TODO: if no chest available display message
     -- Regular job
-    local job = {name=readJobName(), tasks={}, type="unit"}
+    local job = { name = readJobName(), tasks = {}, type = "unit" }
     if not addTask(job["tasks"]) then return false end
     writeColor("Would you like to add another task ? [y/n]\n")
     local more = read(nil, nil, nil, "n")
@@ -197,22 +190,22 @@ if jobtype == "regular" then
     os.sleep(2)
 else
     -- Cron job
-    local job = {name=readJobName(), tasks={}, type="cron"}
+    local job = { name = readJobName(), tasks = {}, type = "cron" }
     local inv = readInventory()
-    if not inv then 
+    if not inv then
         writeColor("Wrong inventory name\n", colors.red)
         return false
     end
     local exec = readCronTask()
     local min, item
-    if exec == "keepMinItemInSlot" then 
+    if exec == "keepMinItemInSlot" then
         min = readMin()
         item = readItemName()
     end
     local slot = readSlot()
     local freq = readFrequency()
-    local params = {location=inv, slot=slot, min=min, item=item}
-    table.insert(job.tasks, {exec=exec, params=params, freq=freq})
+    local params = { location = inv, slot = slot, min = min, item = item }
+    table.insert(job.tasks, { exec = exec, params = params, freq = freq })
     -- TODO add multiple tasks features for cron jobs
     local resp = addJob(job)
     if resp.ok then
