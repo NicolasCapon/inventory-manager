@@ -120,7 +120,7 @@ function ServerActions:smartCraft(recipe, count)
         end
     end
     if count > min then
-        local div = count // min
+        local div = math.floor(count / min)
         local res = count % min
         for _ = 1, div do
             local req =self:craft(recipe, min)

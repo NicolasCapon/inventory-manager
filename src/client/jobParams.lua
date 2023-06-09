@@ -132,11 +132,11 @@ function popup.invokeLiveParamsPopup(job, liveParams, count, gui)
                 firstParam = false
             end
             if param == "item" then
-                getValueFns[param] = createItemBloc(y, f, "- Item name", first)
+                y, getValueFns[param] = createItemBloc(y, f, "- Item name", first)
             elseif param == "count" then
-                getValueFns[param] = createCntBloc(y, f, "- Item count", first)
+                y, getValueFns[param] = createCntBloc(y, f, "- Item count", first)
             elseif param == "location" then
-                getValueFns[param] = createLocBloc(y, f, "- Export to", first)
+                y, getValueFns[param] = createLocBloc(y, f, "- Export to", first)
             end
             if first then first = false end -- next tasks are not the first
         end

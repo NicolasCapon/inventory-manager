@@ -1,4 +1,5 @@
 local completion = require "cc.completion"
+package.path = package.path .. ';../?.lua'
 local config = require("config")
 
 local SERVER = config.SERVER_ID

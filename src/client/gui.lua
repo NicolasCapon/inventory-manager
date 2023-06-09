@@ -133,7 +133,7 @@ function ClientGUI:start()
     end
     local fn4 = function() self:getSelectedItem() end
     local fn5 = function()
-        if self:craftAndLearn().ok then
+        if self.actions:craftAndLearn().ok then
             self:sync()
         end
     end
@@ -285,7 +285,7 @@ function ClientGUI:getSelectedItem()
     end
     local selectedItemText = self.itemsList:getItem(index).text
     if utils.isRecipe(selectedItemText) then
-        self:craftRecursive(selectedItem, count)
+        self.actions:craftRecursive(selectedItem, count, self.recipes)
     elseif utils.isJob(selectedItemText) then
         local job = self.jobs[selectedItem]
         if liveParamsPopUp.getLiveParams(job, count, self) then
@@ -303,7 +303,10 @@ function ClientGUI:getSelectedItem()
             end
         end
     else
-        local req = self:getOrCraft(selectedItem, count)
+        local req = self.actions:getOrCraft(selectedItem,
+                                            count,
+                                            self.inventory,
+                                            self.recipes)
         if not req.ok then
             return false
         end
