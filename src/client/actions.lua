@@ -38,7 +38,7 @@ function ServerActions:getOrCraft(name, count, inventory, recipes)
         -- is a recipe for this item
         local recipeCount = count - maxCount
         if recipes[name] then
-            if not self:craftRecursive(name, recipeCount) then
+            if not self:craftRecursive(name, recipeCount, recipes) then
                 -- If we cannot craft then only give what's in inventory
                 count = maxCount
             else

@@ -24,7 +24,7 @@ end
 local function loadRecipes()
     local recipes = {}
     local idCount = 1
-    if not fs.exists(config.RECIPES_FILE) then return {} end
+    if not fs.exists(config.RECIPES_FILE) then return {}, 1 end
     for line in io.lines(config.RECIPES_FILE) do
         local recipe = textutils.unserialize(line)
         if not recipes[recipe.name] then
