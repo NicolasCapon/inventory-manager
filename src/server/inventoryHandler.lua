@@ -76,11 +76,13 @@ function InventoryHandler:scanRemoteInventory(remote, variableLimit)
                     slot = { index = cslot, limit = limit }
                 })
         else
+            local displayName = item.displayName
             item = scanItem(item)
-            local slots = self.inventory[item.name]
+            local slots = self.inventory[item.name].loc
             if slots == nil then
                 -- new item, add it and its associated slot
-                self.inventory[item.name] = { {
+                self.inventory[item.name] = { displayName = displayName }
+                self.inventory[item.name].loc = { {
                     chest = remote,
                     slot = {
                         index = cslot,
@@ -90,7 +92,7 @@ function InventoryHandler:scanRemoteInventory(remote, variableLimit)
                 } }
             else
                 -- item already listed, add this slot only
-                table.insert(self.inventory[item.name],
+                table.insert(self.inventory[item.name].loc,
                     {
                         chest = remote,
                         slot = {
@@ -133,7 +135,7 @@ function InventoryHandler:get(name, count, destination, slot)
             error = error
         }
     else
-        for i, location in ipairs(item) do
+        for i, location in ipairs(item.loc) do
             local chest = location.chest
             local inventory_count = location.slot.count
             local left = inventory_count - count
@@ -147,7 +149,7 @@ function InventoryHandler:get(name, count, destination, slot)
                     count,
                     slot)
                 -- update inventory
-                self.inventory[name][i]["slot"]["count"] = inventory_count - ret
+                self.inventory[name].loc[i]["slot"]["count"] = inventory_count - ret
                 count = count - ret
                 if count == 0 then break end
             elseif left == 0 then
@@ -162,7 +164,7 @@ function InventoryHandler:get(name, count, destination, slot)
                 -- add free slot and remove inventory slot
                 count = count - ret
                 local slot_count = inventory_count - ret
-                self.inventory[name][i]["slot"]["count"] = slot_count
+                self.inventory[name].loc[i]["slot"]["count"] = slot_count
                 if slot_count == 0 then
                     table.insert(self.free, {
                         chest = chest,
@@ -171,7 +173,7 @@ function InventoryHandler:get(name, count, destination, slot)
                             limit = location.slot.limit
                         }
                     })
-                    self.inventory[name][i].status = "TO_REMOVE"
+                    self.inventory[name].loc[i].status = "TO_REMOVE"
                 end
                 if count == 0 then break end
             else
@@ -193,11 +195,11 @@ function InventoryHandler:get(name, count, destination, slot)
                     }
                 })
                 count = count - ret
-                self.inventory[name][i].status = "TO_REMOVE"
+                self.inventory[name].loc[i].status = "TO_REMOVE"
             end
         end
         -- if not enough items, clear what was still extracted
-        self.inventory[name] = clearInventory(self.inventory[name])
+        clearInventory(self.inventory[name].loc)
         if count > 0 then
             local error = "Not enough item " .. name ..
                 " or place for it, missing " .. count
@@ -254,7 +256,7 @@ function InventoryHandler:put_in_free_slot(item, count, destination, slot)
                 }
             end
             -- add item in inventory
-            table.insert(self.inventory[name], {
+            table.insert(self.inventory[name].loc, {
                 chest = chest,
                 slot = {
                     index = fslot.slot.index,
@@ -291,7 +293,7 @@ function InventoryHandler:put_in_free_slot(item, count, destination, slot)
                 }
             end
             -- update inventory
-            table.insert(self.inventory[name], {
+            table.insert(self.inventory[name].loc, {
                 chest = chest,
                 slot = {
                     index = fslot.slot.index,
@@ -333,17 +335,21 @@ end
 
 -- Put item from destination slot to main inventory
 function InventoryHandler:put(item, dest, slot)
+    item = scanItem(item)
     local name = item.name
     local count = item.count
     local maxCount = item.maxCount
     local invItem = self.inventory[name]
     if invItem == nil then
         -- if item not in inventory, fill free slots
-        self.inventory[name] = {}
+        self.inventory[name] = {
+            displayName = item.displayName,
+            loc = {}
+        }
         return self:put_in_free_slot(item, count, dest, slot)
     else
         -- try to fill already used slots
-        for i, islot in ipairs(invItem) do
+        for i, islot in ipairs(invItem.loc) do
             local available = islot.slot.limit - islot.slot.count
             if available > 0 then
                 local left = available - count
@@ -371,7 +377,7 @@ function InventoryHandler:put(item, dest, slot)
                             error = ret
                         }
                     end
-                    self.inventory[name][i].slot.count = islot.slot.count + ret
+                    self.inventory[name].loc[i].slot.count = islot.slot.count + ret
                     return {
                         ok = true,
                         response = { name = name, count = count },
@@ -399,7 +405,7 @@ function InventoryHandler:put(item, dest, slot)
                             error = ret
                         }
                     end
-                    self.inventory[name][i].slot.count = islot.slot.count + ret
+                    self.inventory[name].loc[i].slot.count = islot.slot.count + ret
                     count = count - ret
                 end
             end

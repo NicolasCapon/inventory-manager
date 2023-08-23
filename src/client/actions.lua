@@ -32,7 +32,7 @@ end
 -- Get given item to destination, if not enough items are available, try to
 -- craft them
 function ServerActions:getOrCraft(name, count, inventory, recipes)
-    local maxCount = utils.getItemCount(inventory[name])
+    local maxCount = utils.getItemCount(inventory[name].loc)
     if count > maxCount then
         -- if we need more than what's in inventoru, try to craft first if there
         -- is a recipe for this item
@@ -197,9 +197,10 @@ function ServerActions:craftAndLearn()
     end
     turtle.select(config.CRAFTING_SLOT)
     if #recipe.items > 0 and turtle.craft() then
-        local item = turtle.getItemDetail(config.CRAFTING_SLOT)
+        local item = turtle.getItemDetail(config.CRAFTING_SLOT, true)
         if item then
             recipe.name = item.name
+            recipe.displayName = item.displayName
             recipe.count = item.count
         end
         local msg = { endpoint = "learnRecipe", recipe = recipe }

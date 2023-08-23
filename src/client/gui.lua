@@ -220,22 +220,24 @@ function ClientGUI:updateItemsList(filter)
     self.items = {}
     self.itemsList:clear()
     if filter then
-        for key, value in pairs(self.inventory) do
-            if string.find(key, filter) then
-                table.insert(self.items, key)
-                local itname = utils.getItemCount(value) .. "\t" .. key
-                local args = { type = "inventory", name = key }
+        for key, val in pairs(self.inventory) do
+            local displayName = val.displayName
+            if string.find(displayName, filter) then
+                table.insert(self.items, displayName)
+                local itname = utils.getItemCount(val) .. "\t" .. displayName
+                local args = { type = "inventory", id = key }
                 self.itemsList:addItem(itname, nil, nil, args)
             end
         end
         -- Display available recipes for unavailable items
-        for key, _ in pairs(self.recipes) do
+        for key, val in pairs(self.recipes) do
             if not self.inventory[key] then
                 -- Item not in inventory, display recipe instead
                 if string.find(key, filter) then
-                    table.insert(self.items, key)
-                    local args = { type = "recipe", name = key }
-                    self.itemsList:addItem("%\t" .. key,
+                    local displayName = val.displayName or key
+                    table.insert(self.items, displayName)
+                    local args = { type = "recipe", id = key }
+                    self.itemsList:addItem("%\t" .. displayName,
                         colors.purple,
                         nil,
                         args)
@@ -246,30 +248,32 @@ function ClientGUI:updateItemsList(filter)
         for key, _ in pairs(self.jobs) do
             if string.find(key, filter) then
                 table.insert(self.items, key)
-                local args = { type = "job", name = key }
+                local args = { type = "job", id = key }
                 self.itemsList:addItem("@\t" .. key, colors.lime, nil, args)
             end
         end
     else
         for key, value in pairs(self.inventory) do
-            table.insert(self.items, key)
-            local itname = utils.getItemCount(value) .. "\t" .. key
-            local args = { type = "inventory", name = key }
+            local displayName = value.displayName
+            table.insert(self.items, displayName)
+            local itname = utils.getItemCount(value) .. "\t" .. displayName
+            local args = { type = "inventory", id = key }
             self.itemsList:addItem(itname, nil, nil, args)
         end
         -- Display available recipes for unavailable items
-        for key, _ in pairs(self.recipes) do
+        for key, val in pairs(self.recipes) do
             if not self.inventory[key] then
                 -- Item not in inventory, display recipe instead
-                table.insert(self.items, key)
-                local args = { type = "recipe", name = key }
-                self.itemsList:addItem("%\t" .. key, nil, nil, args)
+                local displayName = val.displayName or key
+                table.insert(self.items, displayName)
+                local args = { type = "recipe", id = key }
+                self.itemsList:addItem("%\t" .. displayName, nil, nil, args)
             end
         end
         -- Display jobs
         for key, _ in pairs(self.jobs) do
             table.insert(self.items, key)
-            local args = { type = "job", name = key }
+            local args = { type = "job", id = key }
             self.itemsList:addItem("@\t" .. key, colors.lime, nil, args)
         end
     end
@@ -283,10 +287,10 @@ function ClientGUI:getSelectedItem()
     if not self.itemsList:getItem(index) then
         return false
     end
-    local selectedItemText = self.itemsList:getItem(index).text
-    if utils.isRecipe(selectedItemText) then
+    local selectedItemId = self.itemsList:getItem(index).args.id
+    if utils.isRecipe(selectedItemId) then
         self.actions:craftRecursive(selectedItem, count, self.recipes)
-    elseif utils.isJob(selectedItemText) then
+    elseif utils.isJob(selectedItemId) then
         local job = self.jobs[selectedItem]
         if liveParamsPopUp.getLiveParams(job, count, self) then
             self.main:getObject("popup"):setFocus()
