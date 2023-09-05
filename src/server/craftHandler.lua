@@ -96,7 +96,7 @@ local function checkMaterials(recipe, count, inventoryCount, inventory)
 end
 
 local function getItemCount(recipe)
-    total = {}
+    local total = {}
     for _, item in ipairs(recipe.items) do
         if total[item.name] then
             total[item.name] = total[item.name] + item.count
